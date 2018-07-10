@@ -1,6 +1,6 @@
 FROM golang:1.9.4
 
-ENV REPO "github.com/Appscrunch/Multy-Back-EOS"
+ENV REPO "github.com/Multy-io/Multy-EOS-node-service"
 
 COPY ./ "$GOPATH/src/$REPO"
 

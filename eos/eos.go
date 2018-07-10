@@ -11,7 +11,7 @@ import (
 	"github.com/eoscanada/eos-go/system"
 	"fmt"
 	"github.com/eoscanada/eos-go/ecc"
-	pb "github.com/Appscrunch/Multy-Back-EOS/proto"
+	pb "github.com/Multy-io/Multy-EOS-node-service/proto"
 	"context"
 	"encoding/hex"
 )

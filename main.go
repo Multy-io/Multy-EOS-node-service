@@ -12,8 +12,8 @@ import (
 	"net"
 	"os"
 
-	"github.com/Appscrunch/Multy-Back-EOS/eos"
-	pb "github.com/Appscrunch/Multy-Back-EOS/proto"
+	"github.com/Multy-io/Multy-EOS-node-service/eos"
+	pb "github.com/Multy-io/Multy-EOS-node-service/proto"
 	"github.com/urfave/cli"
 	"google.golang.org/grpc"
 )
