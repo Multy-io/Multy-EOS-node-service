@@ -1,0 +1,27 @@
+version: '3.4'
+
+services:
+    nodeos:
+        image: eosio/eos:v1.0.8
+        command: nodeos --data-dir /opt/eosio/data --config-dir /etc/eosio
+        #command: nodeos --data-dir /opt/eosio/data --config-dir /etc/eosio --genesis-json /etc/eosio/genesis.json
+        expose:
+            - "8888"
+        ports:
+            - "8888"
+            - "9876"
+        volumes:
+            - "./config:/etc/eosio"
+            - "./chain_data:/opt/eosio/data"
+    api:
+        build: ../..
+        image: multyio/eos-back:v0.1
+        links:
+            - nodeos:nodeos
+        env_file:
+            - env.api.secret
+        environment:
+            - "MULTY_EOS_PORT=80"
+            - "MULTY_EOS_NODE=http://nodeos:8888"
+        ports:
+            - "80"

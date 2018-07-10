@@ -1,0 +1,12 @@
+version: '3.4'
+
+services:
+    nodeos:
+        image: eosio/eos:latest
+        command: nodeos --data-dir /opt/eosio/data --config-dir /etc/eosio 
+        #command: nodeos --data-dir /opt/eosio/data --config-dir /etc/eosio --genesis-json /etc/eosio/genesis.json
+        ports:
+            - "8888"
+        volumes:
+            - "./config:/etc/eosio"
+            - "./chain_data:/opt/eosio/data"

@@ -1,0 +1,95 @@
+syntax = "proto3";
+// based on https://github.com/Appscrunch/Multy-back/
+package proto;
+
+service NodeCommunications {
+    rpc EventGetChainInfo (Empty) returns (ChainInfo);
+
+    rpc EventGetBalance (BalanceReq) returns (Balances);
+
+    rpc EventGetAccount (Account) returns (AccountInfo);
+
+    rpc EventPushTransaction (Transaction) returns (PushTransactionResp);
+
+    rpc EventGetTransactionInfo (TransactionID) returns (TransactionInfo);
+
+    rpc EventAccountCreate (AccountCreateReq) returns (OkErrResponse);
+}
+
+message OkErrResponse {
+    bool ok = 1;
+    string error = 2;
+}
+
+message Empty {
+
+}
+
+message ChainInfo {
+    uint32 head_block_num = 1;
+    string head_block_id = 2;
+    int64 head_block_time = 3; //unix time
+    uint32 last_irreversible_block_num = 4;
+}
+
+message BalanceReq {
+    string name = 1;
+    string symbol = 2; // empty for all assets
+    string code = 3; // smart contract code account name, empty for eosio.token
+}
+
+message Account {
+    string name = 1;
+}
+
+message Balances {
+    repeated Asset assets = 2;
+}
+
+message Asset {
+    int64 ammount = 1;
+    uint32 precision = 2;
+    string symbol = 3;
+}
+
+message AccountInfo {
+    string name = 1;
+    int64 ram_available = 2;
+    Asset core_liquid_balance = 3;
+//    int64 ram_usage = 4;
+//    int64 ram_quota = 5;
+}
+
+message Transaction {
+    repeated string signatures = 1;
+    Compression compression = 2;
+    bytes packed_context_free_data = 3;
+    bytes packed_trx = 4;
+}
+
+enum Compression {
+    NONE = 0;
+    ZLIB = 1;
+}
+
+message PushTransactionResp {
+    string id = 1;
+    string status_code = 3;
+}
+
+message TransactionID {
+    string id = 1;
+}
+
+message TransactionInfo {
+    string id = 1;
+    uint32 block_num = 2;
+}
+
+message AccountCreateReq {
+    string name = 1;
+    string active_key = 2;
+    string owner_key = 3;
+    uint64 ram_cost = 4;
+}
+
