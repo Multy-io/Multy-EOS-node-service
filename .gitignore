@@ -1,0 +1,10 @@
+vendor/*/
+!vendor/vendor.json
+
+docker/*/env.*.secret
+
+docker/*/*chain_data/*
+
+multy-eos
+
+.idea

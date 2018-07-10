@@ -1,0 +1,11 @@
+version: '3.4'
+
+services:
+    nodeos:
+        image: eosio/eos:latest
+        command: nodeos -e -p eosio --plugin eosio::chain_api_plugin --plugin eosio::history_api_plugin
+        ports:
+            - "8888:7722"
+        volumes:
+            - "./config:/etc/eosio"
+            - "./chain_data:/opt/eosio/data"
