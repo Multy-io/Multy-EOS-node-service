@@ -35,6 +35,8 @@ service NodeCommunications {
     // EventSetTrackedAccount resets tracked accounts
     rpc EventSetTrackedAccounts(Accounts) returns (Empty);
 
+    // EventGetRAMPrice get actual RAM price using rammarket
+    rpc EventGetRAMPrice(Empty) returns (RAMPrice);
 }
 
 message OkErrResponse {
@@ -123,3 +125,6 @@ message Exist {
     bool exist = 1;
 }
 
+message RAMPrice {
+    double price = 1;
+}
