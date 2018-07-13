@@ -30,9 +30,11 @@ const (
 
 func run(c *cli.Context) error {
 	server, err := eos.NewServer(
-		c.String("node"),
+		c.String("rpc"),
+		c.String("p2p"),
 		c.String("account"),
 		c.String("key"),
+		0, // use recent block as start
 	)
 	if err != nil {
 		return cli.NewExitError(fmt.Sprintf("cannot init server: %s", err), 2)
@@ -51,7 +53,8 @@ func run(c *cli.Context) error {
 	pb.RegisterNodeCommunicationsServer(s, server)
 
 	log.Printf("listening on %s", addr)
-	return cli.NewExitError(s.Serve(lis), 3)
+	err = s.Serve(lis)
+	return cli.NewExitError(err, 3)
 }
 
 func main() {
@@ -74,9 +77,14 @@ func main() {
 			Value:  "8080",
 		},
 		cli.StringFlag{
-			Name:   "node",
-			Usage:  "node api address",
+			Name:   "rpc",
+			Usage:  "node rpc api address",
 			EnvVar: "MULTY_EOS_NODE",
+		},
+		cli.StringFlag{
+			Name:   "p2p",
+			Usage:  "node p2p address",
+			EnvVar: "MULTY_EOS_P2P",
 		},
 		cli.StringFlag{
 			Name:   "account",

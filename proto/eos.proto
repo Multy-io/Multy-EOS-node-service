@@ -3,17 +3,38 @@ syntax = "proto3";
 package proto;
 
 service NodeCommunications {
+    // EventGetChainInfo gets current state info
     rpc EventGetChainInfo (Empty) returns (ChainInfo);
 
+    // EventGetBalance get balance
+    // from standard eosio.token smart-contract by default
+    // for all the tokens by default
     rpc EventGetBalance (BalanceReq) returns (Balances);
 
+    // EventGetAccount gets account data such as unused ram or core liquid balance
     rpc EventGetAccount (Account) returns (AccountInfo);
 
+    // EventPushTransaction pushes transaction to chain
     rpc EventPushTransaction (Transaction) returns (PushTransactionResp);
 
+    // EventGetTransactionInfo get transaction block number
     rpc EventGetTransactionInfo (TransactionID) returns (TransactionInfo);
 
+    // Event account create creates account if cost is right
     rpc EventAccountCreate (AccountCreateReq) returns (OkErrResponse);
+
+    // EventAccountCheck checks if account exists.
+    rpc EventAccountCheck (Account) returns (Exist);
+
+    // BalanceChanged streams changed balances
+    rpc BalanceChanged(Empty) returns (stream Balances);
+
+    // EventTrackAccount marks account as tracked
+    rpc EventTrackAccount(Account) returns (Empty);
+
+    // EventSetTrackedAccount resets tracked accounts
+    rpc EventSetTrackedAccounts(Accounts) returns (Empty);
+
 }
 
 message OkErrResponse {
@@ -38,11 +59,16 @@ message BalanceReq {
     string code = 3; // smart contract code account name, empty for eosio.token
 }
 
+message Accounts {
+    repeated Account accounts = 1;
+}
+
 message Account {
     string name = 1;
 }
 
 message Balances {
+    string account = 1;
     repeated Asset assets = 2;
 }
 
@@ -55,7 +81,7 @@ message Asset {
 message AccountInfo {
     string name = 1;
     int64 ram_available = 2;
-    Asset core_liquid_balance = 3;
+    Asset core_liquid_balance = 3; // may not be present for some reason
 //    int64 ram_usage = 4;
 //    int64 ram_quota = 5;
 }
@@ -91,5 +117,9 @@ message AccountCreateReq {
     string active_key = 2;
     string owner_key = 3;
     uint64 ram_cost = 4;
+}
+
+message Exist {
+    bool exist = 1;
 }
 
