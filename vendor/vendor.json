@@ -9,14 +9,11 @@
 			"revisionTime": "2018-02-21T22:46:20Z"
 		},
 		{
-			"checksumSHA1": "DDEwAGNchOdfmy1O44fSus+AcPE=",
-			"origin": "github.com/vovapi/eos-go",
+			"checksumSHA1": "EZvn0iGUrFxVIIb6ezSbscV2AzM=",
 			"path": "github.com/eoscanada/eos-go",
-			"revision": "35f4296a18b7b9b090c7edad099f9b27f59747f4",
-			"revisionTime": "2018-07-13T12:35:03Z",
-			"tree": true,
-			"version": "sellram",
-			"versionExact": "sellram"
+			"revision": "16135e604a9d490f37a9ed90c479aabb39c250c5",
+			"revisionTime": "2018-07-13T18:55:36Z",
+			"tree": true
 		},
 		{
 			"checksumSHA1": "OaECjBPfByj/uEEGFqFhqK0Kgzw=",
