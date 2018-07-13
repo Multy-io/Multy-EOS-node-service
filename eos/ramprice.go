@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"encoding/json"
 	"strconv"
+	"context"
+
+	pb "github.com/Multy-io/Multy-EOS-node-service/proto"
 )
 
 type RamMarket struct {
@@ -32,8 +35,8 @@ func (w *WeightType) UnmarshalJSON(data []byte) error {
 }
 
 // getRAMPrice gets amount of RAM that you can buy for 1 EOS
-func getRAMPrice(api *eos.API) (float64, error) {
-	rawResp, err := api.GetTableRows(eos.GetTableRowsRequest{
+func (s *Server) getRAMPrice(ctx context.Context, _ *pb.Empty) (*pb.RAMPrice, error) {
+	rawResp, err := s.Api.GetTableRows(eos.GetTableRowsRequest{
 		Code:  "eosio",
 		Scope: "eosio",
 		Table: "rammarket",
@@ -51,5 +54,7 @@ func getRAMPrice(api *eos.API) (float64, error) {
 
 	price := (10000.0 - ((10000.0 + 199.0) / 200.0)) / (float64(market.Quote.Balance.Amount) / float64(market.Base.Balance.Amount))
 
-	return price, nil
+	return &pb.RAMPrice{
+		Price:price,
+	}, nil
 }
