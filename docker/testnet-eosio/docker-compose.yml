@@ -22,6 +22,7 @@ services:
             - env.api.secret
         environment:
             - "MULTY_EOS_PORT=80"
-            - "MULTY_EOS_NODE=http://nodeos:8888"
+            - "MULTY_EOS_RPC=http://nodeos:8888"
+            - "MULTY_EOS_P2P=nodeos:9876"
         ports:
             - "80"

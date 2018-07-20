@@ -4,7 +4,7 @@ BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
 COMMIT = $(shell git rev-parse --short HEAD)
 BUILDTIME = $(shell date +%Y-%m-%dT%T%z)
 
-LD_OPTS = -ldflags="-X main.branch=${BRANCH} -X main.commit=${COMMIT} -X main.buildtime=${BUILDTIME} -w"
+LD_OPTS = -ldflags="-X main.branch=${BRANCH} -X main.commit=${COMMIT} -X main.lasttag=${LASTTAG} -X main.buildtime=${BUILDTIME} -w "
 
 all:  build run
 
@@ -17,7 +17,7 @@ setup:
 	go get -u github.com/kardianos/govendor
 
 deps:
-	govendor sync
+	govendor sync -v
 
 build:
 	go build $(LD_OPTS) -o $(NAME) .

@@ -4,155 +4,358 @@
  * See LICENSE for details
  */
 
+// Package eos is a Multy node service gRPC server implementation
+// See methods' descriptions if proto package
 package eos
 
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	pb "github.com/Multy-io/Multy-EOS-node-service/proto"
+	"github.com/Multy-io/Multy-EOS-node-service/proto"
 	"github.com/eoscanada/eos-go"
 	"github.com/eoscanada/eos-go/ecc"
+	"github.com/eoscanada/eos-go/p2p"
 	"github.com/eoscanada/eos-go/system"
+	// blank import for registering token actions.
 	_ "github.com/eoscanada/eos-go/token"
+	"log"
+	"time"
 )
 
-const MESSAGE_BUFFER_SIZE = 100
+const (
+	// historyBufferSize is a size for users' history streaming
+	historyBufferSize = 100
+	// resyncTimeout is a timeout for account resync operation.
+	// this is need to stop goroutines if something go wrong
+	resyncTimeout = time.Hour * 12
+)
 
+// UserData is a multy wallet user data
+type UserData struct {
+	UserID       string
+	WalletIndex  int32
+	AddressIndex int32
+}
+
+// Server is a EOS node gRPC server struct
 type Server struct {
-	Api       *eos.API
+	api     *eos.API
+	p2pAddr string
+
 	account   eos.AccountName
 	activeKey string
 
-	tracked          map[string]bool // accounts to track
-	balanceChangedCh chan string
+	version proto.ServiceVersion
+
+	startBlockNum uint32 // TODO: pass this with requests
+
+	// accounts to track
+	trackedUsers map[string]UserData
+	// user history chan
+	historyCh chan proto.EOSAction
 }
 
-func NewServer(rpcAddr, p2pAddr, account, privKey string, startBlock uint32) (*Server, error) {
-	client := &Server{
-		Api:              eos.New(rpcAddr),
-		account:          eos.AccountName(account),
-		activeKey:        privKey,
-		tracked:          make(map[string]bool),
-		balanceChangedCh: make(chan string, MESSAGE_BUFFER_SIZE),
+// NewServer constructs new server.
+// For proper usage you need to set version and signed
+// using SetVersion & SetSigner
+func NewServer(rpcAddr, p2pAddr string) *Server {
+	server := &Server{
+		api:           eos.New(rpcAddr),
+		p2pAddr:       p2pAddr,
+		trackedUsers:  make(map[string]UserData),
+		startBlockNum: 0, // 0 for most recent by default
+		historyCh:     make(chan proto.EOSAction, historyBufferSize),
 	}
+	return server
+}
+
+// SetVersion sets version info for multy-back to request
+func (server *Server) SetVersion(branch, commit, buildtime, lasttag string) {
+	server.version = proto.ServiceVersion{
+		Branch:    branch,
+		Buildtime: buildtime,
+		Commit:    commit,
+		Lasttag:   lasttag,
+	}
+	return
+}
+
+// SetSigner sets credentials for signer
+func (server *Server) SetSigner(account, privKeyActive string) error {
+	server.account = eos.AccountName(account)
 	keyBag := eos.NewKeyBag()
-	err := keyBag.ImportPrivateKey(privKey)
+	err := keyBag.ImportPrivateKey(privKeyActive)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	client.Api.SetSigner(keyBag)
-	go client.BlockProcess(context.TODO(), p2pAddr, startBlock)
-
-	return client, nil
+	server.api.SetSigner(keyBag)
+	return nil
 }
 
-func (c *Server) EventGetChainInfo(ctx context.Context, _ *pb.Empty) (*pb.ChainInfo, error) {
-	resp, err := c.Api.GetInfo()
-	if err != nil {
-		return nil, err
-	}
-	return &pb.ChainInfo{
-		HeadBlockNum:             resp.HeadBlockNum,
-		HeadBlockId:              hex.EncodeToString(resp.HeadBlockID),
-		HeadBlockTime:            resp.HeadBlockTime.Unix(),
-		LastIrreversibleBlockNum: resp.LastIrreversibleBlockNum,
-	}, nil
+func (server *Server) ServiceInfo(_ context.Context, _ *proto.Empty) (*proto.ServiceVersion, error) {
+	version := proto.ServiceVersion(server.version)
+	return &version, nil
 }
 
-// EventGetBalance only gets 'eosio.token' balance for now
-func (c *Server) EventGetBalance(ctx context.Context, req *pb.BalanceReq) (*pb.Balances, error) {
-	code := req.Code
-	if code == "" {
-		code = "eosio.token"
-	}
-	resp, err := c.Api.GetCurrencyBalance(eos.AccountName(req.Name), req.Symbol, eos.AccountName(code))
-	//resp, err := c.Api.GetAccount(eos.AccountName(req.Name))
-	if err != nil {
-		return nil, err
-	}
-	balances := &pb.Balances{
-		Assets: make([]*pb.Asset, len(resp)),
-	}
-	for i, a := range resp {
-		balances.Assets[i] = asset(a)
-	}
-	return balances, nil
-}
-
-func asset(a eos.Asset) *pb.Asset {
-	return &pb.Asset{
-		Ammount:   a.Amount,
-		Precision: uint32(a.Precision),
-		Symbol:    a.Symbol.Symbol,
-	}
-}
-
-func (c *Server) EventGetAccount(ctx context.Context, req *pb.Account) (*pb.AccountInfo, error) {
-	resp, err := c.Api.GetAccount(eos.AccountName(req.Name))
-	if err != nil {
-		return nil, err
-	}
-	return &pb.AccountInfo{
-		Name:              string(resp.AccountName),
-		CoreLiquidBalance: asset(resp.CoreLiquidBalance),
-		RamAvailable:      resp.RAMQuota - resp.RAMUsage,
-	}, nil
-}
-
-func (c *Server) EventPushTransaction(ctx context.Context, req *pb.Transaction) (*pb.PushTransactionResp, error) {
-	signatures := make([]ecc.Signature, 0, len(req.Signatures))
-	for _, sig := range req.Signatures {
-		txSig, err := ecc.NewSignature(sig)
-		if err != nil {
-			return nil, err
+func (server *Server) EventInitialAdd(_ context.Context, userData *proto.UsersData) (*proto.ReplyInfo, error) {
+	for key, val := range userData.GetMap() {
+		// TODO: check if account exist?
+		server.trackedUsers[key] = UserData{
+			AddressIndex: val.AddressIndex,
+			UserID:       val.UserID,
+			WalletIndex:  val.WalletIndex,
 		}
-		signatures = append(signatures, txSig)
 	}
-	tx := eos.PackedTransaction{
-		Signatures:            signatures,
-		Compression:           eos.CompressionType(req.Compression),
-		PackedContextFreeData: req.PackedContextFreeData,
-		PackedTransaction:     req.PackedTrx,
-	}
-	resp, err := c.Api.PushTransaction(&tx)
-	if err != nil {
-		return &pb.PushTransactionResp{}, nil
-	}
-	return &pb.PushTransactionResp{
-		Id:         resp.TransactionID,
-		StatusCode: resp.StatusCode,
-	}, nil
+	return &proto.ReplyInfo{}, nil
 }
 
-func (c *Server) EventGetTransactionInfo(ctx context.Context, req *pb.TransactionID) (*pb.TransactionInfo, error) {
-	resp, err := c.Api.GetTransaction(req.Id)
+func (server *Server) EventAddNewAddress(_ context.Context, acc *proto.WatchAddress) (*proto.ReplyInfo, error) {
+	// TODO: check if account exist?
+	server.trackedUsers[acc.Address] = UserData{
+		WalletIndex:  acc.WalletIndex,
+		UserID:       acc.UserID,
+		AddressIndex: acc.AddressIndex,
+	}
+	return &proto.ReplyInfo{}, nil
+}
+
+func (server *Server) EventGetBlockHeight(_ context.Context, _ *proto.Empty) (*proto.BlockHeight, error) {
+	resp, err := server.api.GetInfo()
 	if err != nil {
 		return nil, err
 	}
-	return &pb.TransactionInfo{
-		Id:       hex.EncodeToString(resp.ID),
-		BlockNum: resp.BlockNum,
+	return &proto.BlockHeight{
+		HeadBlockNum: resp.HeadBlockNum,
+		HeadBlockId:  hex.EncodeToString(resp.HeadBlockID),
 	}, nil
 }
 
-func (c *Server) EventAccountCreate(ctx context.Context, req *pb.AccountCreateReq) (*pb.OkErrResponse, error) {
+func (server *Server) EventGetAddressBalance(_ context.Context, acc *proto.AddressToResync) (*proto.Balance, error) {
+	resp, err := server.api.GetCurrencyBalance(eos.AN(acc.Address), "EOS", eos.AN("eosio.token"))
+	if err != nil {
+		return nil, err
+	}
+	if len(resp) != 1 {
+		return nil, fmt.Errorf("EOS balance not single: %v", resp)
+	}
+	return &proto.Balance{
+		Balance: resp[0].String(),
+	}, nil
+}
+
+func (server *Server) EventResyncAddress(_ context.Context, acc *proto.AddressToResync) (*proto.ReplyInfo, error) {
+	//TODO: consider streaming return
+	// TODO: check if account exist?
+
+	log.Println("resync")
+
+	// check if account is in trackedUsers
+	userData, ok := server.trackedUsers[acc.Address]
+	if !ok {
+		err := fmt.Errorf("user not trackedUsers: %s", acc.Address)
+		return &proto.ReplyInfo{
+			Message: err.Error(),
+		}, err
+	}
+
+	ctx := context.Background()
+	singleTracker := map[string]UserData{acc.Address: userData}
+	handlerCtx, handlerCancel := context.WithTimeout(ctx, resyncTimeout)
+	blockNumCh := make(chan uint32)
+
+	handler := &blockDataHandler{
+		blockNumCh:   blockNumCh,
+		resync:       true,
+		history:      server.historyCh,
+		trackedUsers: singleTracker,
+		name:         fmt.Sprintf("resync %s", acc.Address),
+		ctx:          handlerCtx,
+	}
+
+	info, err := server.api.GetInfo()
+	if err != nil {
+		return &proto.ReplyInfo{
+			Message: err.Error(),
+		}, err
+	}
+
+	endBlockNum := info.HeadBlockNum
+
+	block, err := server.api.GetBlockByNum(1)
+	if err != nil {
+		return &proto.ReplyInfo{
+			Message: err.Error(),
+		}, err
+	}
+
+	p2pClient := p2p.NewClient(server.p2pAddr, info.ChainID, networkVersion)
+
+	p2pClient.RegisterHandler(handler)
+	go p2pClient.ConnectAndSync(1, block.ID, block.Timestamp.Time, 0, make([]byte, 32))
+
+	log.Println("sync done")
+
+	go func() {
+		for {
+			select {
+			case blockNum := <-blockNumCh:
+				if blockNum > endBlockNum {
+					log.Printf("done resync %s", acc.Address)
+					handlerCancel()
+					p2pClient.UnregisterHandler(handler)
+				}
+			}
+		}
+	}()
+
+	log.Println("return")
+
+	err = ctx.Err()
+	if err != nil {
+		return &proto.ReplyInfo{
+			Message: err.Error(),
+		}, err
+	}
+	return &proto.ReplyInfo{}, nil
+}
+
+func (server *Server) EventNewBlock(_ *proto.Empty, stream proto.NodeCommunications_EventNewBlockServer) error {
+	info, err := server.api.GetInfo()
+	if err != nil {
+		return fmt.Errorf("get_info: %s", err)
+	}
+	p2pClient := p2p.NewClient(server.p2pAddr, info.ChainID, networkVersion)
+	heights := make(chan proto.BlockHeight)
+	ctx := stream.Context()
+	handlerCtx, handlerCancel := context.WithCancel(ctx)
+	handler := &blockHeightHandler{
+		ctx:         handlerCtx,
+		blockHeight: heights,
+	}
+	p2pClient.RegisterHandler(handler)
+	defer p2pClient.UnregisterHandler(handler)
+	go p2pClient.ConnectRecent()
+
+	for {
+		select {
+		case <-ctx.Done():
+			handlerCancel()
+			return ctx.Err()
+		case height := <-heights:
+			err = stream.Send(&height)
+			if err != nil {
+				handlerCancel()
+				return err
+			}
+		}
+	}
+	return ctx.Err()
+
+}
+
+func (server *Server) EventSendRawTx(_ context.Context, tx *proto.RawTx) (*proto.ReplyInfo, error) {
+	signatures, err := signatures(tx.Signatures)
+	if err != nil {
+		return &proto.ReplyInfo{
+			Message: err.Error(),
+		}, err
+	}
+	resp, err := server.api.PushTransaction(&eos.PackedTransaction{
+		PackedTransaction:     tx.PackedTrx,
+		PackedContextFreeData: tx.PackedContextFreeData,
+		Compression:           compressionType(tx.Compression),
+		Signatures:            signatures,
+	})
+	if err != nil {
+		return &proto.ReplyInfo{
+			Message: err.Error(),
+		}, err
+	}
+	//TODO: review response, clean output
+	respJSON, err := json.Marshal(resp)
+	if err != nil {
+		return &proto.ReplyInfo{
+			Message: err.Error(),
+		}, err
+	}
+	return &proto.ReplyInfo{
+		Message: string(respJSON),
+	}, nil
+}
+
+func (server *Server) NewTx(_ *proto.Empty, stream proto.NodeCommunications_NewTxServer) error {
+	info, err := server.api.GetInfo()
+	if err != nil {
+		return fmt.Errorf("get_info: %s", err)
+	}
+
+	startBlockNum := server.startBlockNum
+	if startBlockNum == 0 {
+		startBlockNum = info.HeadBlockNum
+	}
+	startBlock, err := server.api.GetBlockByNum(startBlockNum)
+	if err != nil {
+		return fmt.Errorf("get_block: %s", err)
+	}
+
+	ctx := stream.Context()
+	handlerCtx, handlerCancel := context.WithCancel(ctx)
+
+	handler := &blockDataHandler{
+		//startBlockNum:startBlockNum,
+		//endBlockNum:math.MaxUint32,
+		ctx:          handlerCtx,
+		name:         "NewTx",
+		trackedUsers: server.trackedUsers,
+		history:      server.historyCh,
+		resync:       false,
+	}
+
+	p2pClient := p2p.NewClient(server.p2pAddr, info.ChainID, networkVersion)
+	p2pClient.RegisterHandler(handler)
+	defer p2pClient.UnregisterHandler(handler)
+	go p2pClient.ConnectAndSync(startBlockNum, startBlock.ID, startBlock.Timestamp.Time, 0, make([]byte, 32))
+
+	for {
+		select {
+		case action := <-server.historyCh:
+			err = stream.Send(&action)
+			if err != nil {
+				handlerCancel()
+				return err
+			}
+		case <-ctx.Done():
+			handlerCancel()
+			return ctx.Err()
+		}
+	}
+	return ctx.Err()
+}
+
+func (server *Server) SyncState(_ context.Context, height *proto.BlockHeight) (*proto.ReplyInfo, error) {
+	server.startBlockNum = height.HeadBlockNum
+	return &proto.ReplyInfo{}, nil
+}
+
+func (server *Server) AccountCreate(ctx context.Context, req *proto.AccountCreateReq) (*proto.ReplyInfo, error) {
 	ownerKey, err := ecc.NewPublicKey(req.OwnerKey)
 	if err != nil {
-		return &pb.OkErrResponse{
-			Ok:    false,
-			Error: fmt.Sprintf("create account: owner key: %s", err),
-		}, nil
+		err = fmt.Errorf("owner: %s", err)
+		return &proto.ReplyInfo{
+			Message: err.Error(),
+		}, err
 	}
 	activeKey, err := ecc.NewPublicKey(req.OwnerKey)
 	if err != nil {
-		return &pb.OkErrResponse{
-			Ok:    false,
-			Error: fmt.Sprintf("create account: active key: %s", err),
-		}, nil
+		err = fmt.Errorf("active: %s", err)
+		return &proto.ReplyInfo{
+			Message: err.Error(),
+		}, err
 	}
 	newAcc := system.NewCustomNewAccount(
-		c.account,
+		server.account,
 		eos.AccountName(req.Name),
 		eos.Authority{
 			Threshold: 1,
@@ -173,57 +376,56 @@ func (c *Server) EventAccountCreate(ctx context.Context, req *pb.AccountCreateRe
 			},
 		},
 	)
-	buyRAM := system.NewBuyRAM(c.account, eos.AccountName(req.Name), req.RamCost)
+	buyRAM := system.NewBuyRAM(server.account, eos.AccountName(req.Name), req.RamCost)
 
 	// TODO: cleos does delegatebw on newaccount
 
-	_, err = c.Api.SignPushActions(newAcc, buyRAM)
+	_, err = server.api.SignPushActions(newAcc, buyRAM)
 	if err != nil {
-		return &pb.OkErrResponse{
-			Ok:    false,
-			Error: fmt.Sprintf("create account: push tx: %s", err),
-		}, nil
+		err = fmt.Errorf("push tx: %s", err)
+		return &proto.ReplyInfo{
+			Message: err.Error(),
+		}, err
 	}
-	return &pb.OkErrResponse{
-		Ok: true,
-	}, nil
+	return &proto.ReplyInfo{}, nil
 }
 
-func (s *Server) EventAccountCheck(ctx context.Context, req *pb.Account) (*pb.Exist, error) {
-	_, err := s.Api.GetAccount(eos.AN(req.Name))
-	return &pb.Exist{
+func (server *Server) AccountCheck(ctx context.Context, req *proto.Account) (*proto.Exist, error) {
+	// TODO: check for errors?
+	_, err := server.api.GetAccount(eos.AN(req.Name))
+	return &proto.Exist{
 		Exist: err == nil,
 	}, nil
 }
 
-func (s *Server) BalanceChanged(_ *pb.Empty, stream pb.NodeCommunications_BalanceChangedServer) error {
-	for {
-		select {
-		case account := <-s.balanceChangedCh:
-			balResp, err := s.EventGetBalance(context.TODO(), &pb.BalanceReq{Name: account})
-			if err != nil {
-				return err
-			}
-			ramResp, err := s.EventGetAccount(context.TODO(), &pb.Account{Name: account})
-			balResp.Assets = append(balResp.Assets, &pb.Asset{Precision: 0, Symbol: "RAM", Ammount: ramResp.RamAvailable})
-			stream.Send(balResp)
-		}
+func (server *Server) GetTokenBalance(ctx context.Context, req *proto.BalanceReq) (*proto.Balances, error) {
+	code := req.Code
+	if code == "" {
+		code = "eosio.token"
 	}
-	return nil
+	resp, err := server.api.GetCurrencyBalance(eos.AccountName(req.Account), req.Symbol, eos.AccountName(code))
+	if err != nil {
+		return nil, err
+	}
+	balances := &proto.Balances{
+		Assets: make([]*proto.Asset, len(resp)),
+	}
+	for i, a := range resp {
+		balances.Assets[i] = asset(a)
+	}
+	return balances, nil
 }
 
-func (s *Server) EventTrackAccount(ctx context.Context, req *pb.Account) (*pb.Empty, error) {
-	s.tracked[req.Name] = true
-	return &pb.Empty{}, nil
-}
-
-func (s *Server) EventSetTrackedAccounts(ctx context.Context, req *pb.Accounts) (*pb.Empty, error) {
-	new := make(map[string]bool)
-	for _, acc := range req.Accounts {
-		new[acc.Name] = true
+func (server *Server) GetChainState(_ context.Context, _ *proto.Empty) (*proto.ChainState, error) {
+	resp, err := server.api.GetInfo()
+	if err != nil {
+		return nil, err
 	}
-	s.tracked = new
-	return &pb.Empty{}, nil
-
-	return &pb.Empty{}, nil
+	return &proto.ChainState{
+		HeadBlockNum:             resp.HeadBlockNum,
+		HeadBlockId:              resp.HeadBlockID,
+		HeadBlockTime:            resp.HeadBlockTime.Unix(),
+		LastIrreversibleBlockNum: resp.LastIrreversibleBlockNum,
+		LastIrreversibleBlockId:  resp.LastIrreversibleBlockID,
+	}, nil
 }

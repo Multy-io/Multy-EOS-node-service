@@ -1,60 +1,56 @@
+/*
+ * Copyright 2018 Idealnaya rabota LLC
+ * Licensed under Multy.io license.
+ * See LICENSE for details
+ */
+
 package eos
 
 import (
-	"github.com/eoscanada/eos-go"
-	"fmt"
-	"encoding/json"
-	"strconv"
 	"context"
-
-	pb "github.com/Multy-io/Multy-EOS-node-service/proto"
+	"fmt"
+	"github.com/Multy-io/Multy-EOS-node-service/proto"
+	"github.com/eoscanada/eos-go"
 )
 
-type RamMarket struct {
-	Supply *eos.Asset `json:"supply"`
-	Base  *BalanceWeight `json:"base"`
-	Quote  *BalanceWeight `json:"quote"`
+type ramMarket struct {
+	Supply *eos.Asset     `json:"supply"`
+	Base   *balanceWeight `json:"base"`
+	Quote  *balanceWeight `json:"quote"`
 }
 
-type BalanceWeight struct {
+type balanceWeight struct {
 	Balance *eos.Asset `json:"balance"`
-	Weight WeightType `json:"weight"`
+	//weight is omitted, we don't need it here
 }
 
-type WeightType float64
-
-func (w *WeightType) UnmarshalJSON(data []byte) error {
-	var s string
-	json.Unmarshal(data, &s)
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return err
-	}
-	*w = WeightType(f)
-	return nil
-}
-
-// getRAMPrice gets amount of RAM that you can buy for 1 EOS
-func (s *Server) getRAMPrice(ctx context.Context, _ *pb.Empty) (*pb.RAMPrice, error) {
-	rawResp, err := s.Api.GetTableRows(eos.GetTableRowsRequest{
+// GetRAMPrice gets amount of RAM that you can buy for 1 EOS
+func (server *Server) GetRAMPrice(ctx context.Context, _ *proto.Empty) (*proto.RAMPrice, error) {
+	rawResp, err := server.api.GetTableRows(eos.GetTableRowsRequest{
 		Code:  "eosio",
 		Scope: "eosio",
 		Table: "rammarket",
 		JSON:  true,
 	})
 	if err != nil {
-		return 0, err
+		return &proto.RAMPrice{
+			Price: 0,
+		}, err
 	}
-	resps := make([]*RamMarket, 1)
+	resps := make([]*ramMarket, 1)
 	err = rawResp.JSONToStructs(&resps)
 	if err != nil {
-		return 0, fmt.Errorf("unmarshall %s", err)
+		return &proto.RAMPrice{
+			Price: 0,
+		}, fmt.Errorf("unmarshall %s", err)
 	}
 	market := resps[0]
 
+	// 0.5% fee, from eos source
+	// 10000 == 1 EOS without precision
 	price := (10000.0 - ((10000.0 + 199.0) / 200.0)) / (float64(market.Quote.Balance.Amount) / float64(market.Base.Balance.Amount))
 
-	return &pb.RAMPrice{
-		Price:price,
+	return &proto.RAMPrice{
+		Price: price,
 	}, nil
 }
