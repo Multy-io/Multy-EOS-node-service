@@ -3,115 +3,151 @@ syntax = "proto3";
 package proto;
 
 service NodeCommunications {
-    // EventGetChainInfo gets current state info
-    rpc EventGetChainInfo (Empty) returns (ChainInfo);
 
-    // EventGetBalance get balance
-    // from standard eosio.token smart-contract by default
-    // for all the tokens by default
-    rpc EventGetBalance (BalanceReq) returns (Balances);
+    // ServiceInfo gets node service build info
+    rpc ServiceInfo(Empty) returns (ServiceVersion);
 
-    // EventGetAccount gets account data such as unused ram or core liquid balance
-    rpc EventGetAccount (Account) returns (AccountInfo);
+    // EventInitialAdd initializes tracked users
+    rpc EventInitialAdd(UsersData) returns (ReplyInfo);
 
-    // EventPushTransaction pushes transaction to chain
-    rpc EventPushTransaction (Transaction) returns (PushTransactionResp);
+    // EventAddNewAddress add address for tracking
+    rpc EventAddNewAddress(WatchAddress) returns (ReplyInfo);
 
-    // EventGetTransactionInfo get transaction block number
-    rpc EventGetTransactionInfo (TransactionID) returns (TransactionInfo);
+    // EventGetBlockHeight gets head block height
+    // (and additional info on chain state)
+    rpc EventGetBlockHeight(Empty) returns (BlockHeight);
 
-    // Event account create creates account if cost is right
-    rpc EventAccountCreate (AccountCreateReq) returns (OkErrResponse);
+    // EventGetAdressBalance get EOS token balance
+    // made for API compability
+    rpc EventGetAddressBalance(AddressToResync) returns (Balance);
 
-    // EventAccountCheck checks if account exists.
-    rpc EventAccountCheck (Account) returns (Exist);
+    // EventResyncAddress resyncs account action history
+    // Actions are pushed to NewTx stream
+    rpc EventResyncAddress(AddressToResync) returns (ReplyInfo);
 
-    // BalanceChanged streams changed balances
-    rpc BalanceChanged(Empty) returns (stream Balances);
+    // EventNewBlock streams new block's info
+    rpc EventNewBlock(Empty) returns (stream BlockHeight);
 
-    // EventTrackAccount marks account as tracked
-    rpc EventTrackAccount(Account) returns (Empty);
+    // EventSendRawTx pushes transaction to chain
+    rpc EventSendRawTx(RawTx) returns (ReplyInfo);
 
-    // EventSetTrackedAccount resets tracked accounts
-    rpc EventSetTrackedAccounts(Accounts) returns (Empty);
+    // NewTx streams new actions data
+    rpc NewTx(Empty) returns (stream EOSAction);
 
-    // EventGetRAMPrice get actual RAM price using rammarket
-    rpc EventGetRAMPrice(Empty) returns (RAMPrice);
-}
+    // SyncState all the tracked account actions
+    // starts with BlockHeight
+    rpc SyncState(BlockHeight) returns (ReplyInfo);
 
-message OkErrResponse {
-    bool ok = 1;
-    string error = 2;
+    //Additional rpcs
+
+    // GetChainState gets current blockchain state info
+    rpc GetChainState(Empty) returns (ChainState);
+
+    // AccountCreate creates account if cost is right
+    rpc AccountCreate(AccountCreateReq) returns (ReplyInfo);
+
+    // AccountCheck checks if account exists.
+    rpc AccountCheck(Account) returns (Exist);
+
+    // GetRAMPrice get actual RAM price using rammarket
+    rpc GetRAMPrice(Empty) returns (RAMPrice);
+
+    // GetTokenBalance get balance for smart contract's token
+    rpc GetTokenBalance(BalanceReq) returns (Balances);
 }
 
 message Empty {
 
 }
 
-message ChainInfo {
+message ServiceVersion {
+    string branch = 1;
+    string commit = 2;
+    string buildtime = 3;
+    string lasttag = 4;
+}
+
+
+message UsersData {
+    map<string, AddressExtended> map = 1;
+}
+
+message AddressExtended {
+    string UserID = 1; // account name
+    int32 WalletIndex = 2;
+    int32 AddressIndex = 3;
+}
+
+
+message ReplyInfo {
+    string message = 1;
+}
+
+message WatchAddress {
+    string address = 1;
+    string userID = 2;
+    int32 WalletIndex = 3;
+    int32 AddressIndex = 4;
+}
+
+message BlockHeight {
     uint32 head_block_num = 1;
     string head_block_id = 2;
-    int64 head_block_time = 3; //unix time
-    uint32 last_irreversible_block_num = 4;
+}
+
+message AddressToResync {
+    string address = 1; // account name
+    //TODO: start block
+}
+
+message Balance {
+    string Balance = 1; // primary (EOS) token balance is string
+}
+
+message RawTx {
+    repeated string signatures = 1;
+    enum Compression {
+        NONE = 0;
+        ZLIB = 1;
+    }
+    Compression compression = 2;
+    bytes packed_context_free_data = 3;
+    bytes packed_trx = 4;
+}
+
+message EOSAction {
+    string UserID = 1;
+    int32 WalletIndex = 2;
+    int32 AddressIndex =3;
+    enum Type {
+        TRANSFER_TOKEN = 0;
+        ISSUE_TOKEN = 1;
+        BUY_RAM_BYTES = 2;
+        BUY_RAM = 3;
+        SELL_RAM = 4;
+    }
+    Type type = 4;
+    string from = 5;
+    string to = 6;
+    Asset amount = 7;
+    string memo = 8;
+    bool resync = 9;
 }
 
 message BalanceReq {
-    string name = 1;
+    string account = 1; // account name
     string symbol = 2; // empty for all assets
     string code = 3; // smart contract code account name, empty for eosio.token
-}
-
-message Accounts {
-    repeated Account accounts = 1;
 }
 
 message Account {
     string name = 1;
 }
 
-message Balances {
-    string account = 1;
-    repeated Asset assets = 2;
-}
-
 message Asset {
     int64 ammount = 1;
     uint32 precision = 2;
     string symbol = 3;
-}
-
-message AccountInfo {
-    string name = 1;
-    int64 ram_available = 2;
-    Asset core_liquid_balance = 3; // may not be present for some reason
-//    int64 ram_usage = 4;
-//    int64 ram_quota = 5;
-}
-
-message Transaction {
-    repeated string signatures = 1;
-    Compression compression = 2;
-    bytes packed_context_free_data = 3;
-    bytes packed_trx = 4;
-}
-
-enum Compression {
-    NONE = 0;
-    ZLIB = 1;
-}
-
-message PushTransactionResp {
-    string id = 1;
-    string status_code = 3;
-}
-
-message TransactionID {
-    string id = 1;
-}
-
-message TransactionInfo {
-    string id = 1;
-    uint32 block_num = 2;
 }
 
 message AccountCreateReq {
@@ -127,4 +163,17 @@ message Exist {
 
 message RAMPrice {
     double price = 1;
+}
+
+message Balances {
+    string account = 1;
+    repeated Asset assets = 2;
+}
+
+message ChainState {
+    uint32 head_block_num = 1;
+    bytes head_block_id = 2;
+    int64 head_block_time = 3; //unix time
+    uint32 last_irreversible_block_num = 4;
+    bytes last_irreversible_block_id = 5;
 }

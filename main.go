@@ -22,23 +22,19 @@ var (
 	commit    string
 	branch    string
 	buildtime string
-)
-
-const (
-	VERSION = "v0.2"
+	lasttag   string
 )
 
 func run(c *cli.Context) error {
-	server, err := eos.NewServer(
+	server := eos.NewServer(
 		c.String("rpc"),
 		c.String("p2p"),
-		c.String("account"),
-		c.String("key"),
-		0, // use recent block as start
 	)
+	err := server.SetSigner(c.String("account"), c.String("key"))
 	if err != nil {
 		return cli.NewExitError(fmt.Sprintf("cannot init server: %s", err), 2)
 	}
+	server.SetVersion(branch, commit, buildtime, lasttag)
 	log.Println("new server")
 
 	addr := fmt.Sprintf("%s:%s", c.String("host"), c.String("port"))
@@ -61,7 +57,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "multy-eos"
 	app.Usage = `eos node gRPC API for Multy backend`
-	app.Version = fmt.Sprintf("%s (commit: %s, branch: %s, buildtime: %s)", VERSION, commit, branch, buildtime)
+	app.Version = fmt.Sprintf("%s (commit: %s, branch: %s, buildtime: %s)", lasttag, commit, branch, buildtime)
 	app.Author = "vovapi"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
@@ -79,7 +75,7 @@ func main() {
 		cli.StringFlag{
 			Name:   "rpc",
 			Usage:  "node rpc api address",
-			EnvVar: "MULTY_EOS_NODE",
+			EnvVar: "MULTY_EOS_RPC",
 		},
 		cli.StringFlag{
 			Name:   "p2p",
