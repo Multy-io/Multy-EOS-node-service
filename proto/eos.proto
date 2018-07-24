@@ -29,7 +29,7 @@ service NodeCommunications {
     rpc EventNewBlock(Empty) returns (stream BlockHeight);
 
     // EventSendRawTx pushes transaction to chain
-    rpc EventSendRawTx(RawTx) returns (ReplyInfo);
+    rpc EventSendRawTx(RawTx) returns (SendTxResp);
 
     // NewTx streams new actions data
     rpc NewTx(Empty) returns (stream EOSAction);
@@ -105,14 +105,11 @@ message Balance {
 }
 
 message RawTx {
-    repeated string signatures = 1;
-    enum Compression {
-        NONE = 0;
-        ZLIB = 1;
-    }
-    Compression compression = 2;
-    bytes packed_context_free_data = 3;
-    bytes packed_trx = 4;
+    bytes transaction = 1;
+}
+
+message SendTxResp {
+    string transaction_id = 1;
 }
 
 message EOSAction {
