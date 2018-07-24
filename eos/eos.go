@@ -255,33 +255,18 @@ func (server *Server) EventNewBlock(_ *proto.Empty, stream proto.NodeCommunicati
 
 }
 
-func (server *Server) EventSendRawTx(_ context.Context, tx *proto.RawTx) (*proto.ReplyInfo, error) {
-	signatures, err := signatures(tx.Signatures)
+func (server *Server) EventSendRawTx(_ context.Context, rawTx *proto.RawTx) (*proto.SendTxResp, error) {
+	tx := &eos.PackedTransaction{}
+	err := json.Unmarshal(rawTx.Transaction, tx)
 	if err != nil {
-		return &proto.ReplyInfo{
-			Message: err.Error(),
-		}, err
+		return &proto.SendTxResp{}, err
 	}
-	resp, err := server.api.PushTransaction(&eos.PackedTransaction{
-		PackedTransaction:     tx.PackedTrx,
-		PackedContextFreeData: tx.PackedContextFreeData,
-		Compression:           compressionType(tx.Compression),
-		Signatures:            signatures,
-	})
+	resp, err := server.api.PushTransaction(tx)
 	if err != nil {
-		return &proto.ReplyInfo{
-			Message: err.Error(),
-		}, err
+		return &proto.SendTxResp{}, err
 	}
-	//TODO: review response, clean output
-	respJSON, err := json.Marshal(resp)
-	if err != nil {
-		return &proto.ReplyInfo{
-			Message: err.Error(),
-		}, err
-	}
-	return &proto.ReplyInfo{
-		Message: string(respJSON),
+	return &proto.SendTxResp{
+		TransactionId: resp.TransactionID,
 	}, nil
 }
 
