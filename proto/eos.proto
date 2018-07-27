@@ -5,31 +5,31 @@ package proto;
 service NodeCommunications {
 
     // ServiceInfo gets node service build info
-    rpc ServiceInfo(Empty) returns (ServiceVersion);
+    rpc ServiceInfo (Empty) returns (ServiceVersion);
 
-    // EventInitialAdd initializes tracked users
-    rpc EventInitialAdd(UsersData) returns (ReplyInfo);
+    // InitialAdd initializes tracked users
+    rpc InitialAdd (UsersData) returns (ReplyInfo);
 
-    // EventAddNewAddress add address for tracking
-    rpc EventAddNewAddress(WatchAddress) returns (ReplyInfo);
+    // AddNewAddress add address for tracking
+    rpc AddNewAddress (WatchAddress) returns (ReplyInfo);
 
-    // EventGetBlockHeight gets head block height
+    // GetBlockHeight gets head block height
     // (and additional info on chain state)
-    rpc EventGetBlockHeight(Empty) returns (BlockHeight);
+    rpc GetBlockHeight (Empty) returns (BlockHeight);
 
     // EventGetAdressBalance get EOS token balance
     // made for API compability
-    rpc EventGetAddressBalance (Account) returns (Balance);
+    rpc GetAddressBalance (Account) returns (Balance);
 
-    // EventResyncAddress resyncs account action history
+    // ResyncAddress resyncs account action history
     // Actions are pushed to NewTx stream
-    rpc EventResyncAddress (AddressToResync) returns (ReplyInfo);
+    rpc ResyncAddress (AddressToResync) returns (ReplyInfo);
 
-    // EventNewBlock streams new block's info
-    rpc EventNewBlock (Empty) returns (stream BlockHeight);
+    // NewBlock streams new block's info
+    rpc NewBlock (Empty) returns (stream BlockHeight);
 
-    // EventSendRawTx pushes transaction to chain
-    rpc EventSendRawTx (RawTx) returns (SendTxResp);
+    // SendRawTx pushes transaction to chain
+    rpc SendRawTx (RawTx) returns (SendTxResp);
 
     // NewTx streams new actions data
     rpc NewTx (Empty) returns (stream Action);
@@ -134,6 +134,7 @@ message Action {
     bytes transaction_id = 10;
     int64 action_index = 11; // index of action in transaction
     string address = 12;
+    uint32 block_num = 13;
 }
 
 message BalanceReq {
