@@ -99,7 +99,7 @@ func (server *Server) ServiceInfo(_ context.Context, _ *proto.Empty) (*proto.Ser
 	return &version, nil
 }
 
-func (server *Server) EventInitialAdd(_ context.Context, userData *proto.UsersData) (*proto.ReplyInfo, error) {
+func (server *Server) InitialAdd(_ context.Context, userData *proto.UsersData) (*proto.ReplyInfo, error) {
 	for key, val := range userData.GetMap() {
 		// TODO: check if account exist?
 		server.trackedUsers[key] = UserData{
@@ -111,7 +111,7 @@ func (server *Server) EventInitialAdd(_ context.Context, userData *proto.UsersDa
 	return &proto.ReplyInfo{}, nil
 }
 
-func (server *Server) EventAddNewAddress(_ context.Context, acc *proto.WatchAddress) (*proto.ReplyInfo, error) {
+func (server *Server) AddNewAddress(_ context.Context, acc *proto.WatchAddress) (*proto.ReplyInfo, error) {
 	// TODO: check if account exist?
 	server.trackedUsers[acc.Address] = UserData{
 		WalletIndex:  acc.WalletIndex,
@@ -121,7 +121,7 @@ func (server *Server) EventAddNewAddress(_ context.Context, acc *proto.WatchAddr
 	return &proto.ReplyInfo{}, nil
 }
 
-func (server *Server) EventGetBlockHeight(_ context.Context, _ *proto.Empty) (*proto.BlockHeight, error) {
+func (server *Server) GetBlockHeight(_ context.Context, _ *proto.Empty) (*proto.BlockHeight, error) {
 	resp, err := server.api.GetInfo()
 	if err != nil {
 		return nil, err
@@ -132,7 +132,7 @@ func (server *Server) EventGetBlockHeight(_ context.Context, _ *proto.Empty) (*p
 	}, nil
 }
 
-func (server *Server) EventGetAddressBalance(_ context.Context, acc *proto.Account) (*proto.Balance, error) {
+func (server *Server) GetAddressBalance(_ context.Context, acc *proto.Account) (*proto.Balance, error) {
 	resp, err := server.api.GetCurrencyBalance(eos.AN(acc.Name), "EOS", eos.AN("eosio.token"))
 	if err != nil {
 		return nil, err
@@ -145,7 +145,7 @@ func (server *Server) EventGetAddressBalance(_ context.Context, acc *proto.Accou
 	}, nil
 }
 
-func (server *Server) EventResyncAddress(_ context.Context, acc *proto.AddressToResync) (*proto.ReplyInfo, error) {
+func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResync) (*proto.ReplyInfo, error) {
 	//TODO: consider streaming return
 	// TODO: check if account exist?
 
@@ -221,7 +221,7 @@ func (server *Server) EventResyncAddress(_ context.Context, acc *proto.AddressTo
 	return &proto.ReplyInfo{}, nil
 }
 
-func (server *Server) EventNewBlock(_ *proto.Empty, stream proto.NodeCommunications_EventNewBlockServer) error {
+func (server *Server) NewBlock(_ *proto.Empty, stream proto.NodeCommunications_NewBlockServer) error {
 	info, err := server.api.GetInfo()
 	if err != nil {
 		return fmt.Errorf("get_info: %s", err)
@@ -255,7 +255,7 @@ func (server *Server) EventNewBlock(_ *proto.Empty, stream proto.NodeCommunicati
 
 }
 
-func (server *Server) EventSendRawTx(_ context.Context, rawTx *proto.RawTx) (*proto.SendTxResp, error) {
+func (server *Server) SendRawTx(_ context.Context, rawTx *proto.RawTx) (*proto.SendTxResp, error) {
 	tx := &eos.PackedTransaction{}
 	err := json.Unmarshal(rawTx.Transaction, tx)
 	if err != nil {
@@ -289,8 +289,6 @@ func (server *Server) NewTx(_ *proto.Empty, stream proto.NodeCommunications_NewT
 	handlerCtx, handlerCancel := context.WithCancel(ctx)
 
 	handler := &blockDataHandler{
-		//startBlockNum:startBlockNum,
-		//endBlockNum:math.MaxUint32,
 		ctx:          handlerCtx,
 		name:         "NewTx",
 		trackedUsers: server.trackedUsers,
