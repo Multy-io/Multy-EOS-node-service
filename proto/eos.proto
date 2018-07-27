@@ -19,41 +19,42 @@ service NodeCommunications {
 
     // EventGetAdressBalance get EOS token balance
     // made for API compability
-    rpc EventGetAddressBalance(AddressToResync) returns (Balance);
+    rpc EventGetAddressBalance (Account) returns (Balance);
 
     // EventResyncAddress resyncs account action history
     // Actions are pushed to NewTx stream
-    rpc EventResyncAddress(AddressToResync) returns (ReplyInfo);
+    rpc EventResyncAddress (AddressToResync) returns (ReplyInfo);
 
     // EventNewBlock streams new block's info
-    rpc EventNewBlock(Empty) returns (stream BlockHeight);
+    rpc EventNewBlock (Empty) returns (stream BlockHeight);
 
     // EventSendRawTx pushes transaction to chain
-    rpc EventSendRawTx(RawTx) returns (SendTxResp);
+    rpc EventSendRawTx (RawTx) returns (SendTxResp);
 
     // NewTx streams new actions data
-    rpc NewTx(Empty) returns (stream EOSAction);
+    rpc NewTx (Empty) returns (stream Action);
 
     // SyncState all the tracked account actions
     // starts with BlockHeight
-    rpc SyncState(BlockHeight) returns (ReplyInfo);
+    rpc SyncState (BlockHeight) returns (ReplyInfo);
 
     //Additional rpcs
 
     // GetChainState gets current blockchain state info
-    rpc GetChainState(Empty) returns (ChainState);
+    rpc GetChainState (Empty) returns (ChainState);
 
     // AccountCreate creates account if cost is right
-    rpc AccountCreate(AccountCreateReq) returns (ReplyInfo);
+    rpc AccountCreate (AccountCreateReq) returns (ReplyInfo);
 
     // AccountCheck checks if account exists.
-    rpc AccountCheck(Account) returns (Exist);
+    // and returns account info if it does
+    rpc AccountCheck (Account) returns (AccountInfo);
 
-    // GetRAMPrice get actual RAM price using rammarket
-    rpc GetRAMPrice(Empty) returns (RAMPrice);
+    // GetRAMPrice get actual RAM price using ram market
+    rpc GetRAMPrice (Empty) returns (RAMPrice);
 
     // GetTokenBalance get balance for smart contract's token
-    rpc GetTokenBalance(BalanceReq) returns (Balances);
+    rpc GetTokenBalance (BalanceReq) returns (Balances);
 }
 
 message Empty {
@@ -93,6 +94,7 @@ message WatchAddress {
 message BlockHeight {
     uint32 head_block_num = 1;
     string head_block_id = 2;
+    int64 head_block_time = 3; //unix time
 }
 
 message AddressToResync {
@@ -112,7 +114,7 @@ message SendTxResp {
     string transaction_id = 1;
 }
 
-message EOSAction {
+message Action {
     string UserID = 1;
     int32 WalletIndex = 2;
     int32 AddressIndex =3;
@@ -129,6 +131,9 @@ message EOSAction {
     Asset amount = 7;
     string memo = 8;
     bool resync = 9;
+    bytes transaction_id = 10;
+    int64 action_index = 11; // index of action in transaction
+    string address = 12;
 }
 
 message BalanceReq {
@@ -142,7 +147,7 @@ message Account {
 }
 
 message Asset {
-    int64 ammount = 1;
+    int64 amount = 1;
     uint32 precision = 2;
     string symbol = 3;
 }
@@ -151,11 +156,15 @@ message AccountCreateReq {
     string name = 1;
     string active_key = 2;
     string owner_key = 3;
-    uint64 ram_cost = 4;
+
+    uint64 ram = 4;
+    int64 cpu = 5;
+    int64 net = 6;
 }
 
-message Exist {
+message AccountInfo {
     bool exist = 1;
+    string public_key = 2;
 }
 
 message RAMPrice {

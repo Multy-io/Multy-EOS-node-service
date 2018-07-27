@@ -20,11 +20,6 @@ import (
 
 var networkVersion = uint16(1206) // networkVersion from eos-go p2p-client tool
 
-// ProcessValue type is used for passing value to context
-// this is done to avoid collisions
-// (context docs tells you to do this)
-type ProcessValue string
-
 type blockDataHandler struct {
 
 	// context docs tells you that storing context in struct is bad
@@ -32,7 +27,7 @@ type blockDataHandler struct {
 	ctx context.Context
 
 	name         string
-	history      chan proto.EOSAction
+	history      chan proto.Action
 	resync       bool
 	trackedUsers map[string]UserData
 
@@ -63,8 +58,8 @@ func (handler blockDataHandler) Handle(msg p2p.Message) {
 						log.Printf("%s (block %d, %s)", err, block.BlockNumber(), handler.name)
 						continue
 					}
-					for _, ac := range unpacked.Actions {
-						go handler.processAction(handler.ctx, ac)
+					for idx, action := range unpacked.Actions {
+						go handler.processAction(action, tx.Transaction.ID, int64(idx))
 					}
 					// TODO: parse context free actions (once it will exist)
 				}
@@ -74,64 +69,62 @@ func (handler blockDataHandler) Handle(msg p2p.Message) {
 	}
 }
 
-func (handler *blockDataHandler) processAction(ctx context.Context, ac *eos.Action) {
-	if ac.Data != nil {
-		err := ac.MapToRegisteredAction()
+func (handler *blockDataHandler) processAction(action *eos.Action, transactionID eos.SHA256Bytes, actionIndex int64) {
+	if action.Data != nil {
+		err := action.MapToRegisteredAction()
 		if err != nil {
 			log.Println(err)
 			return
 		}
 
+		toSend := proto.Action{
+			ActionIndex:   actionIndex,
+			TransactionId: transactionID,
+		}
+
 		// check for default smart-contracts' action
-		switch op := ac.Data.(type) {
+		switch op := action.Data.(type) {
 		// eosio.token
 		case *token.Transfer:
-			toSend := proto.EOSAction{
-				Type:   proto.EOSAction_TRANSFER_TOKEN,
-				From:   string(op.From),
-				To:     string(op.To),
-				Amount: asset(op.Quantity),
-				Memo:   op.Memo,
-			}
-			handler.sendHistory(ctx, toSend, op.From)
-			handler.sendHistory(ctx, toSend, op.To)
-		case *token.Issue:
-			toSend := proto.EOSAction{
-				Type:   proto.EOSAction_ISSUE_TOKEN,
-				From:   "eosio.token", // this is default token contract
-				To:     string(op.To),
-				Amount: asset(op.Quantity),
-				Memo:   op.Memo,
-			}
+			toSend.Type = proto.Action_TRANSFER_TOKEN
+			toSend.From = string(op.From)
+			toSend.To = string(op.To)
+			toSend.Amount = asset(op.Quantity)
+			toSend.Memo = op.Memo
 
-			handler.sendHistory(ctx, toSend, op.To)
+			handler.sendHistory(toSend, op.From)
+			handler.sendHistory(toSend, op.To)
+		case *token.Issue:
+			toSend.Type = proto.Action_ISSUE_TOKEN
+			toSend.From = "eosio.token" // this is default token contract
+			toSend.To = string(op.To)
+			toSend.Amount = asset(op.Quantity)
+			toSend.Memo = op.Memo
+
+			handler.sendHistory(toSend, op.To)
 		// eosio
 		case *system.BuyRAM:
-			toSend := proto.EOSAction{
-				Type:   proto.EOSAction_BUY_RAM,
-				From:   string(op.Payer),
-				To:     string(op.Receiver),
-				Amount: asset(op.Quantity),
-			}
-			handler.sendHistory(ctx, toSend, op.Payer)
-			handler.sendHistory(ctx, toSend, op.Receiver)
+			toSend.Type = proto.Action_BUY_RAM
+			toSend.From = string(op.Payer)
+			toSend.To = string(op.Receiver)
+			toSend.Amount = asset(op.Quantity)
+
+			handler.sendHistory(toSend, op.Payer)
+			handler.sendHistory(toSend, op.Receiver)
 		case *system.BuyRAMBytes:
-			toSend := proto.EOSAction{
-				Type:   proto.EOSAction_BUY_RAM_BYTES,
-				From:   string(op.Payer),
-				To:     string(op.Receiver),
-				Amount: makeRAM(uint64(op.Bytes)),
-			}
-			handler.sendHistory(ctx, toSend, op.Payer)
-			handler.sendHistory(ctx, toSend, op.Receiver)
+			toSend.Type = proto.Action_BUY_RAM_BYTES
+			toSend.From = string(op.Payer)
+			toSend.To = string(op.Receiver)
+			toSend.Amount = makeRAM(uint64(op.Bytes))
+
+			handler.sendHistory(toSend, op.Payer)
+			handler.sendHistory(toSend, op.Receiver)
 		case *system.SellRAM:
-			toSend := proto.EOSAction{
-				Type:   proto.EOSAction_SELL_RAM,
-				From:   string(op.Account),
-				To:     string(op.Account), // you sell it for yourself
-				Amount: makeRAM(op.Bytes),
-			}
-			handler.sendHistory(ctx, toSend, op.Account)
+			toSend.From = string(op.Account)
+			toSend.To = string(op.Account) // you sell it for yourself
+			toSend.Amount = makeRAM(op.Bytes)
+
+			handler.sendHistory(toSend, op.Account)
 		}
 	}
 }
@@ -139,7 +132,7 @@ func (handler *blockDataHandler) processAction(ctx context.Context, ac *eos.Acti
 // sendHistory checks if user is trackedUsers
 // and fills user data fields
 // and then sends extended action data to a chanel
-func (handler *blockDataHandler) sendHistory(ctx context.Context, action proto.EOSAction, account eos.AccountName) {
+func (handler *blockDataHandler) sendHistory(action proto.Action, account eos.AccountName) {
 	if user, ok := handler.trackedUsers[string(account)]; ok {
 		log.Printf("found action %s", account)
 		action.Resync = handler.resync
@@ -147,8 +140,9 @@ func (handler *blockDataHandler) sendHistory(ctx context.Context, action proto.E
 		action.UserID = user.UserID
 		action.WalletIndex = user.WalletIndex
 		action.AddressIndex = user.AddressIndex
+		action.Address = string(account)
 		select {
-		case <-ctx.Done():
+		case <-handler.ctx.Done():
 			return
 		case handler.history <- action:
 			return
@@ -160,7 +154,7 @@ func (handler *blockDataHandler) sendHistory(ctx context.Context, action proto.E
 func makeRAM(bytes uint64) *proto.Asset {
 	return &proto.Asset{
 		Symbol:    "RAM",
-		Ammount:   int64(bytes),
+		Amount:    int64(bytes),
 		Precision: 0,
 	}
 }
@@ -193,57 +187,3 @@ func (handler blockHeightHandler) Handle(processable p2p.Message) {
 		}
 	}
 }
-
-//// ProcessBlockHeight fetches new block data
-//func (server *Server) ProcessBlockHeight(ctx context.Context, name string) error {
-//	log.Println("ProcessBlockHeight")
-//	info, err := server.api.GetInfo()
-//	if err != nil {
-//		log.Printf("block process: %s (%s)", err, name)
-//		return fmt.Errorf("block process : %s", err, name)
-//	}
-//	handlerCtx, handlerCancel := context.WithCancel(ctx)
-//	handler := p2p.HandlerFunc(func(processable p2p.Message) {
-//		select {
-//		case <-handlerCtx.Done():
-//			return
-//		default:
-//			log.Println("type")
-//			log.Println(processable.Envelope.Type.Name())
-//			if processable.Envelope.Type == eos.SignedBlockType {
-//				msg := processable.Envelope.P2PMessage.(*eos.SignedBlock)
-//				id, err := msg.BlockID()
-//				if err != nil {
-//					log.Printf("block_id: %s", err)
-//					return
-//				}
-//				server.blockHeightCh <- proto.BlockHeight{
-//					HeadBlockNum: msg.BlockNumber(),
-//					HeadBlockId:  hex.EncodeToString(id),
-//				}
-//			}
-//		}
-//	})
-//	client := p2p.NewClient(server.p2pAddr, info.ChainID, networkVersion)
-//	client.RegisterHandler(handler)
-//	err = client.ConnectRecent()
-//	if err != nil {
-//		log.Println(err)
-//		handlerCancel()
-//		// BUG: UnregisterHandler of HandlerFunc panics
-//		//client.UnregisterHandler(handler)
-//		return err
-//	}
-//	for {
-//		select {
-//		case <-ctx.Done():
-//			handlerCancel()
-//			break
-//		default:
-//			time.Sleep(time.Millisecond * 100) // 0.1 second
-//		}
-//	}
-//	// BUG: UnregisterHandler of HandlerFunc panics
-//	//client.UnregisterHandler(handler)
-//	return nil
-//}
