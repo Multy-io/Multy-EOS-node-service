@@ -39,7 +39,7 @@ GLOBAL OPTIONS:
    --host value     hostname to bind to [$MULTY_EOS_HOST]
    --port value     port to bind to (default: "8080") [$MULTY_EOS_PORT]
    --node value     node api address [$MULTY_EOS_NODE]
-   --account value  eosit account for user registration [$MULTY_EOS_ACCOUNT]
+   --account value  eos account for user registration [$MULTY_EOS_ACCOUNT]
    --key value      active key for specified user for user registration [$MULTY_EOS_KEY]
    --help, -h       show help
    --version, -v    print the version
@@ -50,5 +50,3 @@ Checkout events in [proto/eos.proto](eos.proto):
 
 ## TODO
 * Graceful shutdown
-* Block fetchig
-* Balance tracking

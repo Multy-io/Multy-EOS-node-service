@@ -54,7 +54,7 @@ type Server struct {
 	// accounts to track
 	trackedUsers map[string]UserData
 	// user history chan
-	historyCh chan proto.EOSAction
+	historyCh chan proto.Action
 }
 
 // NewServer constructs new server.
@@ -66,7 +66,7 @@ func NewServer(rpcAddr, p2pAddr string) *Server {
 		p2pAddr:       p2pAddr,
 		trackedUsers:  make(map[string]UserData),
 		startBlockNum: 0, // 0 for most recent by default
-		historyCh:     make(chan proto.EOSAction, historyBufferSize),
+		historyCh:     make(chan proto.Action, historyBufferSize),
 	}
 	return server
 }
@@ -132,8 +132,8 @@ func (server *Server) EventGetBlockHeight(_ context.Context, _ *proto.Empty) (*p
 	}, nil
 }
 
-func (server *Server) EventGetAddressBalance(_ context.Context, acc *proto.AddressToResync) (*proto.Balance, error) {
-	resp, err := server.api.GetCurrencyBalance(eos.AN(acc.Address), "EOS", eos.AN("eosio.token"))
+func (server *Server) EventGetAddressBalance(_ context.Context, acc *proto.Account) (*proto.Balance, error) {
+	resp, err := server.api.GetCurrencyBalance(eos.AN(acc.Name), "EOS", eos.AN("eosio.token"))
 	if err != nil {
 		return nil, err
 	}
@@ -361,11 +361,12 @@ func (server *Server) AccountCreate(ctx context.Context, req *proto.AccountCreat
 			},
 		},
 	)
-	buyRAM := system.NewBuyRAM(server.account, eos.AccountName(req.Name), req.RamCost)
+	buyRAM := system.NewBuyRAM(server.account, eos.AccountName(req.Name), req.Ram)
 
-	// TODO: cleos does delegatebw on newaccount
+	delegateBW := system.NewDelegateBW(server.account, eos.AN(req.Name),
+		eos.NewEOSAsset(req.Cpu), eos.NewEOSAsset(req.Net), true)
 
-	_, err = server.api.SignPushActions(newAcc, buyRAM)
+	_, err = server.api.SignPushActions(newAcc, buyRAM, delegateBW)
 	if err != nil {
 		err = fmt.Errorf("push tx: %s", err)
 		return &proto.ReplyInfo{
@@ -375,11 +376,22 @@ func (server *Server) AccountCreate(ctx context.Context, req *proto.AccountCreat
 	return &proto.ReplyInfo{}, nil
 }
 
-func (server *Server) AccountCheck(ctx context.Context, req *proto.Account) (*proto.Exist, error) {
+func (server *Server) AccountCheck(ctx context.Context, req *proto.Account) (*proto.AccountInfo, error) {
+	account, err := server.api.GetAccount(eos.AN(req.Name))
+	var pubKey string
+	for i := range account.Permissions {
+		if account.Permissions[i].PermName == "owner" {
+			// TODO: not shure what to return on multiple keys...
+			if len(account.Permissions[i].RequiredAuth.Keys) != 1 {
+				break
+			}
+			pubKey = account.Permissions[i].RequiredAuth.Keys[0].PublicKey.String()
+		}
+	}
 	// TODO: check for errors?
-	_, err := server.api.GetAccount(eos.AN(req.Name))
-	return &proto.Exist{
-		Exist: err == nil,
+	return &proto.AccountInfo{
+		Exist:     err == nil,
+		PublicKey: pubKey,
 	}, nil
 }
 

@@ -84,7 +84,7 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:   "account",
-			Usage:  "eosit account for user registration",
+			Usage:  "eos account for user registration",
 			EnvVar: "MULTY_EOS_ACCOUNT",
 		},
 		cli.StringFlag{

@@ -15,7 +15,7 @@ import (
 // from eos-go asset struct
 func asset(a eos.Asset) *proto.Asset {
 	return &proto.Asset{
-		Ammount:   a.Amount,
+		Amount:    a.Amount,
 		Precision: uint32(a.Precision),
 		Symbol:    a.Symbol.Symbol,
 	}

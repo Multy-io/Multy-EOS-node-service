@@ -37,14 +37,14 @@ func (server *Server) GetRAMPrice(ctx context.Context, _ *proto.Empty) (*proto.R
 			Price: 0,
 		}, err
 	}
-	resps := make([]*ramMarket, 1)
-	err = rawResp.JSONToStructs(&resps)
+	markets := make([]*ramMarket, 1)
+	err = rawResp.JSONToStructs(&markets)
 	if err != nil {
 		return &proto.RAMPrice{
 			Price: 0,
 		}, fmt.Errorf("unmarshall %s", err)
 	}
-	market := resps[0]
+	market := markets[0]
 
 	// 0.5% fee, from eos source
 	// 10000 == 1 EOS without precision
