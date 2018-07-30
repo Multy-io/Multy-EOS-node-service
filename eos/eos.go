@@ -19,8 +19,11 @@ import (
 	"github.com/eoscanada/eos-go/p2p"
 	"github.com/eoscanada/eos-go/system"
 	// blank import for registering token actions.
+	"bytes"
 	_ "github.com/eoscanada/eos-go/token"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"time"
 )
 
@@ -43,6 +46,7 @@ type UserData struct {
 type Server struct {
 	api     *eos.API
 	p2pAddr string
+	rpcAddr string
 
 	account   eos.AccountName
 	activeKey string
@@ -64,6 +68,7 @@ func NewServer(rpcAddr, p2pAddr string) *Server {
 	server := &Server{
 		api:           eos.New(rpcAddr),
 		p2pAddr:       p2pAddr,
+		rpcAddr:       rpcAddr,
 		trackedUsers:  make(map[string]UserData),
 		startBlockNum: 0, // 0 for most recent by default
 		historyCh:     make(chan proto.Action, historyBufferSize),
@@ -423,4 +428,26 @@ func (server *Server) GetChainState(_ context.Context, _ *proto.Empty) (*proto.C
 		LastIrreversibleBlockNum: resp.LastIrreversibleBlockNum,
 		LastIrreversibleBlockId:  resp.LastIrreversibleBlockID,
 	}, nil
+}
+
+func (server *Server) GetKeyAccounts(_ context.Context, req *proto.PublicKey) (*proto.Accounts, error) {
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.Post(fmt.Sprintf("%s/v1/history/get_key_accounts", server.rpcAddr),
+		"application/json", bytes.NewReader(reqJSON))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		// TODO more sane response, needs node research
+		return nil, fmt.Errorf("response not ok: %v", ioutil.ReadAll(resp.Body))
+	}
+
+	var accounts proto.Accounts
+	err = json.NewDecoder(resp.Body).Decode(&accounts)
+	// TODO: check if owner key
+	return &accounts, err
 }

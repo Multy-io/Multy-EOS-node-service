@@ -55,6 +55,9 @@ service NodeCommunications {
 
     // GetTokenBalance get balance for smart contract's token
     rpc GetTokenBalance (BalanceReq) returns (Balances);
+
+    // GetKeyAccount gets account that is controled by given public key
+    rpc GetKeyAccounts(PublicKey) returns (Accounts);
 }
 
 message Empty {
@@ -183,4 +186,12 @@ message ChainState {
     int64 head_block_time = 3; //unix time
     uint32 last_irreversible_block_num = 4;
     bytes last_irreversible_block_id = 5;
+}
+
+message Accounts {
+    repeated string account_names = 1;
+}
+
+message PublicKey {
+    string public_key = 1;
 }
