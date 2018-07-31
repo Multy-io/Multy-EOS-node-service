@@ -7,14 +7,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
 	"os"
 
-	"github.com/Multy-io/Multy-EOS-node-service/eos"
-	pb "github.com/Multy-io/Multy-EOS-node-service/proto"
 	"github.com/urfave/cli"
+	"github.com/vovapi/Multy-EOS-node-service/eos"
+	pb "github.com/vovapi/Multy-EOS-node-service/proto"
 	"google.golang.org/grpc"
 )
 
@@ -36,6 +37,8 @@ func run(c *cli.Context) error {
 	}
 	server.SetVersion(branch, commit, buildtime, lasttag)
 	log.Println("new server")
+
+	server.GetChainState(context.Background(), &pb.Empty{})
 
 	addr := fmt.Sprintf("%s:%s", c.String("host"), c.String("port"))
 
@@ -70,17 +73,19 @@ func main() {
 			Name:   "port",
 			Usage:  "port to bind to",
 			EnvVar: "MULTY_EOS_PORT",
-			Value:  "8080",
+			Value:  "32889",
 		},
 		cli.StringFlag{
 			Name:   "rpc",
 			Usage:  "node rpc api address",
 			EnvVar: "MULTY_EOS_RPC",
+			Value:  "http://144.76.203.79:32951",
 		},
 		cli.StringFlag{
 			Name:   "p2p",
 			Usage:  "node p2p address",
 			EnvVar: "MULTY_EOS_P2P",
+			Value:  "144.76.203.79:32950",
 		},
 		cli.StringFlag{
 			Name:   "account",
