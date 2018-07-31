@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+
 	"github.com/Multy-io/Multy-EOS-node-service/proto"
 	"github.com/eoscanada/eos-go"
 	"github.com/eoscanada/eos-go/ecc"
@@ -20,11 +21,12 @@ import (
 	"github.com/eoscanada/eos-go/system"
 	// blank import for registering token actions.
 	"bytes"
-	_ "github.com/eoscanada/eos-go/token"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
+
+	_ "github.com/eoscanada/eos-go/token"
 )
 
 const (
@@ -443,7 +445,8 @@ func (server *Server) GetKeyAccounts(_ context.Context, req *proto.PublicKey) (*
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		// TODO more sane response, needs node research
-		return nil, fmt.Errorf("response not ok: %v", ioutil.ReadAll(resp.Body))
+		bs, _ := ioutil.ReadAll(resp.Body)
+		return nil, fmt.Errorf("response not ok: %v", string(bs))
 	}
 
 	var accounts proto.Accounts
