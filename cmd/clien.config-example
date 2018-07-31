@@ -1,0 +1,34 @@
+{
+    "Host": "localhost",
+    "Port": "32889",
+    "RPC": "http://144.36.203.79:32951",
+    "P2P": "144.76.303.79:32950",
+    "Account": "acc",
+    "Key": "key",
+
+    "Logs": {
+        "Handlers": [
+            {
+                "Type": "stderr",
+                "Level": "DEBUG"
+            },
+            {
+                "Type": "file",
+                "Level": "INFO",
+                "Filename": "info.log"
+            },
+            {
+                "Type": "file",
+                "Level": "WARN",
+                "Filename": "error.log"
+            },
+            {
+                "Type": "file",
+                "Level": "DEBUG",
+                "Filename": "debug.log"
+            }
+        ],
+        "CallerInfo": false,
+        "Logpath": "logs"
+    }
+}
