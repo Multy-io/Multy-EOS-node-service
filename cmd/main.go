@@ -13,9 +13,9 @@ import (
 	"net"
 	"os"
 
+	"github.com/Multy-io/Multy-EOS-node-service/eos"
+	pb "github.com/Multy-io/Multy-EOS-node-service/proto"
 	"github.com/urfave/cli"
-	"github.com/vovapi/Multy-EOS-node-service/eos"
-	pb "github.com/vovapi/Multy-EOS-node-service/proto"
 	"google.golang.org/grpc"
 )
 
