@@ -1,10 +1,10 @@
 {
     "Host": "localhost",
     "Port": "32889",
-    "RPC": "http://144.36.203.79:32951",
+    "RPC": "144.36.203.79:32951",
     "P2P": "144.76.303.79:32950",
-    "Account": "acc",
-    "Key": "key",
+    "Account": "account",
+    "Key": "private_key",
 
     "Logs": {
         "Handlers": [
