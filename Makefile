@@ -1,4 +1,4 @@
-NAME = multy-eos
+NAME = client
 
 BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
 COMMIT = $(shell git rev-parse --short HEAD)

@@ -9,12 +9,15 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
-	"os"
 
+	"github.com/Multy-io/Multy-EOS-node-service"
 	"github.com/Multy-io/Multy-EOS-node-service/eos"
 	pb "github.com/Multy-io/Multy-EOS-node-service/proto"
+	"github.com/Multy-io/Multy-back/store"
+	"github.com/jekabolt/config"
+	"github.com/jekabolt/slf"
+	_ "github.com/jekabolt/slflog"
 	"github.com/urfave/cli"
 	"google.golang.org/grpc"
 )
@@ -24,23 +27,45 @@ var (
 	branch    string
 	buildtime string
 	lasttag   string
+	log       = slf.WithContext("main")
 )
 
-func run(c *cli.Context) error {
+var globalOpt = eosservice.Configuration{
+	Name: "eos-service",
+}
+
+func main() {
+	config.ReadGlobalConfig(&globalOpt, "eos-service configuration")
+	log.Infof("CONFIGURATION=%+v", globalOpt)
+	log.Infof("branch: %s", branch)
+	log.Infof("commit: %s", commit)
+	log.Infof("build time: %s", buildtime)
+	globalOpt.ServiceInfo = store.ServiceInfo{
+		Branch:    branch,
+		Commit:    commit,
+		Buildtime: buildtime,
+	}
+	initService(globalOpt)
+
+	block := make(chan bool)
+	<-block
+}
+
+func initService(conf eosservice.Configuration) error {
 	server := eos.NewServer(
-		c.String("rpc"),
-		c.String("p2p"),
+		conf.RPC,
+		conf.P2P,
 	)
-	err := server.SetSigner(c.String("account"), c.String("key"))
+	err := server.SetSigner(conf.Account, conf.Key)
 	if err != nil {
 		return cli.NewExitError(fmt.Sprintf("cannot init server: %s", err), 2)
 	}
 	server.SetVersion(branch, commit, buildtime, lasttag)
-	log.Println("new server")
+	log.Infof("new server")
 
 	server.GetChainState(context.Background(), &pb.Empty{})
 
-	addr := fmt.Sprintf("%s:%s", c.String("host"), c.String("port"))
+	addr := fmt.Sprintf("%s:%s", conf.Host, conf.Port)
 
 	// init gRPC server
 	lis, err := net.Listen("tcp", addr)
@@ -51,53 +76,7 @@ func run(c *cli.Context) error {
 	s := grpc.NewServer()
 	pb.RegisterNodeCommunicationsServer(s, server)
 
-	log.Printf("listening on %s", addr)
+	log.Infof("listening on %s", addr)
 	err = s.Serve(lis)
 	return cli.NewExitError(err, 3)
-}
-
-func main() {
-	app := cli.NewApp()
-	app.Name = "multy-eos"
-	app.Usage = `eos node gRPC API for Multy backend`
-	app.Version = fmt.Sprintf("%s (commit: %s, branch: %s, buildtime: %s)", lasttag, commit, branch, buildtime)
-	app.Author = "vovapi"
-	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:   "host",
-			Usage:  "hostname to bind to",
-			EnvVar: "MULTY_EOS_HOST",
-			Value:  "",
-		},
-		cli.StringFlag{
-			Name:   "port",
-			Usage:  "port to bind to",
-			EnvVar: "MULTY_EOS_PORT",
-			Value:  "32889",
-		},
-		cli.StringFlag{
-			Name:   "rpc",
-			Usage:  "node rpc api address",
-			EnvVar: "MULTY_EOS_RPC",
-			Value:  "http://144.76.203.79:32951",
-		},
-		cli.StringFlag{
-			Name:   "p2p",
-			Usage:  "node p2p address",
-			EnvVar: "MULTY_EOS_P2P",
-			Value:  "144.76.203.79:32950",
-		},
-		cli.StringFlag{
-			Name:   "account",
-			Usage:  "eos account for user registration",
-			EnvVar: "MULTY_EOS_ACCOUNT",
-		},
-		cli.StringFlag{
-			Name:   "key",
-			Usage:  "active key for specified user for user registration",
-			EnvVar: "MULTY_EOS_KEY",
-		},
-	}
-	app.Action = run
-	app.Run(os.Args)
 }

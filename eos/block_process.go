@@ -8,17 +8,21 @@ package eos
 
 import (
 	"context"
+
 	"github.com/eoscanada/eos-go"
 	"github.com/eoscanada/eos-go/p2p"
 	"github.com/eoscanada/eos-go/system"
 	"github.com/eoscanada/eos-go/token"
-	"log"
+	"github.com/jekabolt/slf"
+	_ "github.com/jekabolt/slflog"
 
 	"encoding/hex"
+
 	"github.com/Multy-io/Multy-EOS-node-service/proto"
 )
 
 var networkVersion = uint16(1206) // networkVersion from eos-go p2p-client tool
+var log = slf.WithContext("eos")
 
 type blockDataHandler struct {
 
@@ -45,7 +49,7 @@ func (handler blockDataHandler) Handle(msg p2p.Message) {
 		if msg.Envelope.Type == eos.SignedBlockType {
 			block := msg.Envelope.P2PMessage.(*eos.SignedBlock)
 			if num := block.BlockNumber(); num%10000 == 0 {
-				log.Printf("process block %d", block.BlockNumber())
+				log.Debugf("process block %d", block.BlockNumber())
 			}
 			if handler.blockNumCh != nil {
 				handler.blockNumCh <- block.BlockNumber()
@@ -55,7 +59,7 @@ func (handler blockDataHandler) Handle(msg p2p.Message) {
 				if tx.Transaction.Packed != nil {
 					unpacked, err := tx.Transaction.Packed.Unpack()
 					if err != nil {
-						log.Printf("%s (block %d, %s)", err, block.BlockNumber(), handler.name)
+						log.Debugf("%s (block %d, %s)", err, block.BlockNumber(), handler.name)
 						continue
 					}
 					for idx, action := range unpacked.Actions {
@@ -73,7 +77,7 @@ func (handler *blockDataHandler) processAction(action *eos.Action, blockNum uint
 	if action.Data != nil {
 		err := action.MapToRegisteredAction()
 		if err != nil {
-			log.Println(err)
+			log.Errorf("processAction:ction.MapToRegisteredAction %v", err.Error())
 			return
 		}
 
@@ -135,7 +139,7 @@ func (handler *blockDataHandler) processAction(action *eos.Action, blockNum uint
 // and then sends extended action data to a chanel
 func (handler *blockDataHandler) sendHistory(action proto.Action, account eos.AccountName) {
 	if user, ok := handler.trackedUsers[string(account)]; ok {
-		log.Printf("found action %s", account)
+		log.Debugf("sendHistory:found action %s", account)
 		action.Resync = handler.resync
 
 		action.UserID = user.UserID
@@ -171,20 +175,21 @@ func (handler blockHeightHandler) Handle(processable p2p.Message) {
 	case <-handler.ctx.Done():
 		return
 	default:
-		log.Println(processable.Envelope.Type.Name())
+		name, ok := processable.Envelope.Type.Name()
+		log.Debugf("blockHeightHandler:Handle: %v %v ", name, ok)
 		if processable.Envelope.Type == eos.SignedBlockType {
 			block := processable.Envelope.P2PMessage.(*eos.SignedBlock)
 			id, err := block.BlockID()
 			if err != nil {
-				log.Printf("block_id: %s", err)
+				log.Errorf("blockHeightHandler:Handle:block_id: %s", err)
 				return
 			}
-			log.Println("handler send")
+			log.Debugf("blockHeightHandler:Handle handler send")
 			handler.blockHeight <- proto.BlockHeight{
 				HeadBlockNum: block.BlockNumber(),
 				HeadBlockId:  hex.EncodeToString(id),
 			}
-			log.Println("handler send done")
+			log.Debugf("handler send done")
 		}
 	}
 }

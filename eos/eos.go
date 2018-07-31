@@ -22,9 +22,10 @@ import (
 	// blank import for registering token actions.
 	"bytes"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"time"
+
+	_ "github.com/jekabolt/slflog"
 
 	_ "github.com/eoscanada/eos-go/token"
 )
@@ -156,7 +157,7 @@ func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResyn
 	//TODO: consider streaming return
 	// TODO: check if account exist?
 
-	log.Println("resync")
+	log.Debugf("ResyncAddress:resync")
 
 	// check if account is in trackedUsers
 	userData, ok := server.trackedUsers[acc.Address]
@@ -202,14 +203,14 @@ func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResyn
 	p2pClient.RegisterHandler(handler)
 	go p2pClient.ConnectAndSync(1, block.ID, block.Timestamp.Time, 0, make([]byte, 32))
 
-	log.Println("sync done")
+	log.Debugf("ResyncAddress:sync done")
 
 	go func() {
 		for {
 			select {
 			case blockNum := <-blockNumCh:
 				if blockNum > endBlockNum {
-					log.Printf("done resync %s", acc.Address)
+					log.Debugf("done resync %s", acc.Address)
 					handlerCancel()
 					p2pClient.UnregisterHandler(handler)
 				}
@@ -217,7 +218,7 @@ func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResyn
 		}
 	}()
 
-	log.Println("return")
+	log.Debugf("return")
 
 	err = ctx.Err()
 	if err != nil {
