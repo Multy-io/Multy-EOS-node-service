@@ -465,7 +465,9 @@ func (server *Server) GetKeyAccounts(_ context.Context, req *proto.PublicKey) (*
 		if err != nil {
 			log.Errorf("get account: %s", err)
 		}
-		ownerAccounts = append(ownerAccounts, getOwner(accountResp))
+		if req.PublicKey == getOwner(accountResp) {
+			ownerAccounts = append(ownerAccounts, name)
+		}
 	}
 	accounts.AccountNames = ownerAccounts
 	return &accounts, err
