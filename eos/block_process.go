@@ -48,7 +48,7 @@ func (handler blockDataHandler) Handle(msg p2p.Message) {
 	default:
 		if msg.Envelope.Type == eos.SignedBlockType {
 			block := msg.Envelope.P2PMessage.(*eos.SignedBlock)
-			if num := block.BlockNumber(); num%10000 == 0 {
+			if num := block.BlockNumber(); num%1000 == 0 {
 				log.Debugf("process block %d", block.BlockNumber())
 			}
 			if handler.blockNumCh != nil {

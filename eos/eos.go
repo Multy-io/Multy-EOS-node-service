@@ -157,7 +157,7 @@ func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResyn
 	//TODO: consider streaming return
 	// TODO: check if account exist?
 
-	log.Debugf("ResyncAddress:resync")
+	log.Debugf("ResyncAddress:resync %s", acc.Address)
 
 	// check if account is in trackedUsers
 	userData, ok := server.trackedUsers[acc.Address]
@@ -213,6 +213,10 @@ func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResyn
 					log.Debugf("done resync %s", acc.Address)
 					handlerCancel()
 					p2pClient.UnregisterHandler(handler)
+					return
+				}
+				if blockNum%1000 == 0 {
+					log.Debugf("resync %s, block %d", acc.Address, blockNum)
 				}
 			}
 		}
