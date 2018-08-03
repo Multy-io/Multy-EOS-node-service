@@ -204,6 +204,7 @@ func (server *Server) resyncInternal(address string, user UserData, startBlockNu
 	go func() {
 		defer p2pClient.UnregisterHandler(handler)
 		var prevBlockNum, blockNum uint32
+		prevBlockNum = startBlockNum
 		for {
 			select {
 			case blockNum = <-blockNumCh:
