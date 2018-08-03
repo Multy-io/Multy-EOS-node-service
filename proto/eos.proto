@@ -168,7 +168,9 @@ message AccountCreateReq {
 
 message AccountInfo {
     bool exist = 1;
-    string public_key = 2;
+    string public_key = 2; // deprecated, use owner_key & active_key
+    string owner_key = 3;
+    string active_key = 4;
 }
 
 message RAMPrice {

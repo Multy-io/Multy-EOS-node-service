@@ -20,3 +20,18 @@ func asset(a eos.Asset) *proto.Asset {
 		Symbol:    a.Symbol.Symbol,
 	}
 }
+
+// GetKey gets public key for given permission from account response structure
+func GetKey(account *eos.AccountResp, permission string) (pubKey string) {
+	for i := range account.Permissions {
+		if account.Permissions[i].PermName == permission {
+			// TODO: not sure what to return on multiple keys...
+			if len(account.Permissions[i].RequiredAuth.Keys) != 1 {
+				log.Errorf("account has multiple %s keys: %s", permission, account.AccountName)
+				continue
+			}
+			pubKey = account.Permissions[i].RequiredAuth.Keys[0].PublicKey.String()
+		}
+	}
+	return
+}

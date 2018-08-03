@@ -388,27 +388,13 @@ func (server *Server) AccountCreate(ctx context.Context, req *proto.AccountCreat
 
 func (server *Server) AccountCheck(ctx context.Context, req *proto.Account) (*proto.AccountInfo, error) {
 	account, err := server.api.GetAccount(eos.AN(req.Name))
-	pubKey := getOwner(account)
 	// TODO: check for errors?
 	return &proto.AccountInfo{
 		Exist:     err == nil,
-		PublicKey: pubKey,
+		PublicKey: GetKey(account, "owner"),
+		ActiveKey: GetKey(account, "active"),
+		OwnerKey:  GetKey(account, "owner"),
 	}, nil
-}
-
-// getOwner gets owner key from account response structure
-func getOwner(account *eos.AccountResp) string {
-	var pubKey string
-	for i := range account.Permissions {
-		if account.Permissions[i].PermName == "owner" {
-			// TODO: not sure what to return on multiple keys...
-			if len(account.Permissions[i].RequiredAuth.Keys) != 1 {
-				break
-			}
-			pubKey = account.Permissions[i].RequiredAuth.Keys[0].PublicKey.String()
-		}
-	}
-	return pubKey
 }
 
 func (server *Server) GetTokenBalance(ctx context.Context, req *proto.BalanceReq) (*proto.Balances, error) {
@@ -469,7 +455,7 @@ func (server *Server) GetKeyAccounts(_ context.Context, req *proto.PublicKey) (*
 		if err != nil {
 			log.Errorf("get account: %s", err)
 		}
-		if req.PublicKey == getOwner(accountResp) {
+		if req.PublicKey == GetKey(accountResp, "owner") {
 			ownerAccounts = append(ownerAccounts, name)
 		}
 	}
