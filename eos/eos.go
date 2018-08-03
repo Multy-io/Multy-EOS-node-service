@@ -257,7 +257,21 @@ func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResyn
 		}, err
 	}
 
-	err := server.resyncInternal(acc.Address, userData, 1)
+	account, err := server.api.GetAccount(eos.AN(acc.Address))
+	if err != nil {
+		log.Errorf("get account %s", err)
+	}
+
+	startBlockNum, err := server.GetBlockNumByTime(account.Created.Time)
+	if err != nil {
+		log.Errorf("resync %s estimate start block num: %s", acc.Address, err)
+		startBlockNum = 1
+	}
+	if startBlockNum == 0 {
+		startBlockNum = 1
+	}
+
+	err = server.resyncInternal(acc.Address, userData, startBlockNum)
 	if err != nil {
 		log.Errorf("resync internal %s", err)
 		return &proto.ReplyInfo{
