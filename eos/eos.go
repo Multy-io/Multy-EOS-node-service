@@ -153,8 +153,96 @@ func (server *Server) GetAddressBalance(_ context.Context, acc *proto.Account) (
 	}, nil
 }
 
-func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResync) (*proto.ReplyInfo, error) {
+func (server *Server) resyncInternal(address string, user UserData, startBlockNum uint32) error {
 	//TODO: consider streaming return
+	// TODO: check if account exist?
+
+	log.Debugf("resync %s", address)
+
+	// check if account is in trackedUsers
+	//userData, ok := server.trackedUsers[acc.Address]
+	//if !ok {
+	//	err := fmt.Errorf("user not trackedUsers: %s", acc.Address)
+	//	return &proto.ReplyInfo{
+	//		Message: err.Error(),
+	//	}, err
+	//}
+
+	ctx := context.Background()
+	singleTracker := map[string]UserData{address: user}
+	handlerCtx, handlerCancel := context.WithTimeout(ctx, resyncTimeout)
+	blockNumCh := make(chan uint32)
+
+	handler := &blockDataHandler{
+		blockNumCh:   blockNumCh,
+		resync:       true,
+		history:      server.historyCh,
+		trackedUsers: singleTracker,
+		name:         fmt.Sprintf("resync %s", address),
+		ctx:          handlerCtx,
+	}
+
+	info, err := server.api.GetInfo()
+	if err != nil {
+		log.Errorf("%s get info %s", handler.name, err)
+		return err
+	}
+
+	endBlockNum := info.HeadBlockNum
+
+	block, err := server.api.GetBlockByNum(startBlockNum)
+	if err != nil {
+		log.Errorf("%s get info %s", handler.name, err)
+		return err
+	}
+
+	p2pClient := p2p.NewClient(server.p2pAddr, info.ChainID, networkVersion)
+
+	p2pClient.RegisterHandler(handler)
+	go p2pClient.ConnectAndSync(block.BlockNum, block.ID, block.Timestamp.Time, 0, make([]byte, 32))
+
+	go func() {
+		defer p2pClient.UnregisterHandler(handler)
+		var prevBlockNum, blockNum uint32
+		for {
+			select {
+			case blockNum = <-blockNumCh:
+				if blockNum-prevBlockNum > 10000 {
+					// there is an issue when p2p client receives block way ahead of current state
+					// e.g. when processing block 2000000 it receives block 8000000
+					// this is workaround for this
+					log.Errorf("%s got strange block num %d, previous %d", handler.name, blockNum, prevBlockNum)
+					handlerCancel()
+					server.resyncInternal(address, user, prevBlockNum)
+					return
+				}
+				if blockNum > endBlockNum {
+					log.Debugf("%s done %d", handler.name, blockNum)
+					handlerCancel()
+					return
+				}
+				if blockNum%1000 == 0 {
+					log.Debugf("%s running, block %d", handler.name, blockNum)
+				}
+				prevBlockNum = blockNum
+			case <-handlerCtx.Done():
+				log.Errorf("done resync, err: %s, block: %d", handlerCtx.Err(), prevBlockNum)
+
+			}
+		}
+	}()
+
+	err = ctx.Err()
+	if err != nil {
+		log.Errorf("%s cannot start %s", handler.name, err)
+		p2pClient.UnregisterHandler(handler)
+		return err
+	}
+	return err
+}
+
+func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResync) (*proto.ReplyInfo, error) {
+	// TODO: consider streaming return
 	// TODO: check if account exist?
 
 	log.Debugf("ResyncAddress:resync %s", acc.Address)
@@ -168,76 +256,9 @@ func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResyn
 		}, err
 	}
 
-	ctx := context.Background()
-	singleTracker := map[string]UserData{acc.Address: userData}
-	handlerCtx, handlerCancel := context.WithTimeout(ctx, resyncTimeout)
-	blockNumCh := make(chan uint32)
-
-	handler := &blockDataHandler{
-		blockNumCh:   blockNumCh,
-		resync:       true,
-		history:      server.historyCh,
-		trackedUsers: singleTracker,
-		name:         fmt.Sprintf("resync %s", acc.Address),
-		ctx:          handlerCtx,
-	}
-
-	info, err := server.api.GetInfo()
+	err := server.resyncInternal(acc.Address, userData, 1)
 	if err != nil {
-		return &proto.ReplyInfo{
-			Message: err.Error(),
-		}, err
-	}
-
-	endBlockNum := info.HeadBlockNum
-
-	block, err := server.api.GetBlockByNum(1)
-	if err != nil {
-		return &proto.ReplyInfo{
-			Message: err.Error(),
-		}, err
-	}
-
-	p2pClient := p2p.NewClient(server.p2pAddr, info.ChainID, networkVersion)
-
-	p2pClient.RegisterHandler(handler)
-	go p2pClient.ConnectAndSync(1, block.ID, block.Timestamp.Time, 0, make([]byte, 32))
-
-	log.Debugf("ResyncAddress:sync done")
-
-	go func() {
-		var prevBlockNum, blockNum uint32
-		for {
-			select {
-			case blockNum = <-blockNumCh:
-				if blockNum-prevBlockNum > 10000 {
-					// there is an issue when p2p client receives block way ahead of current state
-					// e.g. when processing block 2000000 it receives block 8000000
-					// this is workaround for this
-					log.Errorf("got strange block num %d, previous %d", blockNum, prevBlockNum)
-					continue
-				}
-				if blockNum > endBlockNum {
-					log.Debugf("done resync %s", acc.Address)
-					handlerCancel()
-					p2pClient.UnregisterHandler(handler)
-					return
-				}
-				if blockNum%1000 == 0 {
-					log.Debugf("resync %s, block %d", acc.Address, blockNum)
-				}
-				prevBlockNum = blockNum
-			case <-handlerCtx.Done():
-				log.Errorf("done resync, err: %s, block: %d", handlerCtx.Err(), prevBlockNum)
-
-			}
-		}
-	}()
-
-	log.Debugf("return")
-
-	err = ctx.Err()
-	if err != nil {
+		log.Errorf("resync internal %s", err)
 		return &proto.ReplyInfo{
 			Message: err.Error(),
 		}, err
