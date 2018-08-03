@@ -210,10 +210,11 @@ func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResyn
 		for {
 			select {
 			case blockNum = <-blockNumCh:
-				if blockNum-prevBlockNum > 1000 {
+				if blockNum-prevBlockNum > 10000 {
 					// there is an issue when p2p client receives block way ahead of current state
 					// e.g. when processing block 2000000 it receives block 8000000
 					// this is workaround for this
+					log.Errorf("got strange block num %d, previous %d", blockNum, prevBlockNum)
 					continue
 				}
 				if blockNum > endBlockNum {
