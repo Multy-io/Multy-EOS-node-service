@@ -206,10 +206,16 @@ func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResyn
 	log.Debugf("ResyncAddress:sync done")
 
 	go func() {
-		var blockNum uint32
+		var prevBlockNum, blockNum uint32
 		for {
 			select {
 			case blockNum = <-blockNumCh:
+				if blockNum-prevBlockNum > 1000 {
+					// there is an issue when p2p client receives block way ahead of current state
+					// e.g. when processing block 2000000 it receives block 8000000
+					// this is workaround for this
+					continue
+				}
 				if blockNum > endBlockNum {
 					log.Debugf("done resync %s", acc.Address)
 					handlerCancel()
@@ -219,8 +225,9 @@ func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResyn
 				if blockNum%1000 == 0 {
 					log.Debugf("resync %s, block %d", acc.Address, blockNum)
 				}
+				prevBlockNum = blockNum
 			case <-handlerCtx.Done():
-				log.Errorf("done resync, err: %s, block: %d", handlerCtx.Err(), blockNum)
+				log.Errorf("done resync, err: %s, block: %d", handlerCtx.Err(), prevBlockNum)
 
 			}
 		}
