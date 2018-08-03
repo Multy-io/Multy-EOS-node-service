@@ -206,9 +206,10 @@ func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResyn
 	log.Debugf("ResyncAddress:sync done")
 
 	go func() {
+		var blockNum uint32
 		for {
 			select {
-			case blockNum := <-blockNumCh:
+			case blockNum = <-blockNumCh:
 				if blockNum > endBlockNum {
 					log.Debugf("done resync %s", acc.Address)
 					handlerCancel()
@@ -218,6 +219,9 @@ func (server *Server) ResyncAddress(_ context.Context, acc *proto.AddressToResyn
 				if blockNum%1000 == 0 {
 					log.Debugf("resync %s, block %d", acc.Address, blockNum)
 				}
+			case <-handlerCtx.Done():
+				log.Errorf("done resync, err: %s, block: %d", handlerCtx.Err(), blockNum)
+
 			}
 		}
 	}()
