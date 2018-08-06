@@ -63,7 +63,7 @@ func (handler blockDataHandler) Handle(msg p2p.Message) {
 						continue
 					}
 					for idx, action := range unpacked.Actions {
-						go handler.processAction(action, block.BlockNumber(), tx.Transaction.ID, int64(idx))
+						go handler.processAction(action, block.BlockNumber(), block.Timestamp.Unix(), tx.Transaction.ID, int64(idx))
 					}
 					// TODO: parse context free actions (once it will exist)
 				}
@@ -73,7 +73,7 @@ func (handler blockDataHandler) Handle(msg p2p.Message) {
 	}
 }
 
-func (handler *blockDataHandler) processAction(action *eos.Action, blockNum uint32, transactionID eos.SHA256Bytes, actionIndex int64) {
+func (handler *blockDataHandler) processAction(action *eos.Action, blockNum uint32, blockTime int64, transactionID eos.SHA256Bytes, actionIndex int64) {
 	if action.Data != nil {
 		err := action.MapToRegisteredAction()
 		if err != nil {

@@ -138,6 +138,7 @@ message Action {
     int64 action_index = 11; // index of action in transaction
     string address = 12;
     uint32 block_num = 13;
+    int64 block_time = 14; //unix time
 }
 
 message BalanceReq {
