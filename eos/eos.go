@@ -228,7 +228,7 @@ func (server *Server) resyncInternal(address string, user UserData, startBlockNu
 				prevBlockNum = blockNum
 			case <-handlerCtx.Done():
 				log.Errorf("done resync, err: %s, block: %d", handlerCtx.Err(), prevBlockNum)
-
+				return
 			}
 		}
 	}()

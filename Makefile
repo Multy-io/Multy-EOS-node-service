@@ -41,4 +41,4 @@ dist:
 	GOOS=linux GOARCH=amd64 go build $(LD_OPTS)  -o $(NAME) .
 
 test:
-	GOOS=linux GOARCH=amd64 go build $(LD_OPTS)  -o test .
+	cd cmd/ && GOOS=linux GOARCH=amd64 go build $(LD_OPTS)  -o test .

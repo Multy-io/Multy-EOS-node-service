@@ -48,7 +48,7 @@ func (server *Server) GetBlockNumByTime(blockTime time.Time) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	guess := uint32(blockTime.Sub(startBlock.Timestamp.Time).Seconds()) * 2
+	guess := uint32(float64(info.HeadBlockNum) / info.HeadBlockTime.Sub(startBlock.Timestamp.Time).Seconds() * blockTime.Sub(startBlock.Timestamp.Time).Seconds())
 	for {
 		if guess > info.HeadBlockNum {
 			break
