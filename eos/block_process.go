@@ -85,6 +85,7 @@ func (handler *blockDataHandler) processAction(action *eos.Action, blockNum uint
 			ActionIndex:   actionIndex,
 			TransactionId: transactionID,
 			BlockNum:      blockNum,
+			BlockTime:     blockTime,
 		}
 
 		// check for default smart-contracts' action
