@@ -48,7 +48,7 @@ func (handler blockDataHandler) Handle(msg p2p.Message) {
 	default:
 		if msg.Envelope.Type == eos.SignedBlockType {
 			block := msg.Envelope.P2PMessage.(*eos.SignedBlock)
-			if num := block.BlockNumber(); num%10000 == 0 {
+			if num := block.BlockNumber(); num%1000 == 0 {
 				log.Debugf("process block %d", block.BlockNumber())
 			}
 			if handler.blockNumCh != nil {
@@ -63,7 +63,7 @@ func (handler blockDataHandler) Handle(msg p2p.Message) {
 						continue
 					}
 					for idx, action := range unpacked.Actions {
-						go handler.processAction(action, block.BlockNumber(), tx.Transaction.ID, int64(idx))
+						go handler.processAction(action, block.BlockNumber(), block.Timestamp.Unix(), tx.Transaction.ID, int64(idx))
 					}
 					// TODO: parse context free actions (once it will exist)
 				}
@@ -73,7 +73,7 @@ func (handler blockDataHandler) Handle(msg p2p.Message) {
 	}
 }
 
-func (handler *blockDataHandler) processAction(action *eos.Action, blockNum uint32, transactionID eos.SHA256Bytes, actionIndex int64) {
+func (handler *blockDataHandler) processAction(action *eos.Action, blockNum uint32, blockTime int64, transactionID eos.SHA256Bytes, actionIndex int64) {
 	if action.Data != nil {
 		err := action.MapToRegisteredAction()
 		if err != nil {
@@ -85,6 +85,7 @@ func (handler *blockDataHandler) processAction(action *eos.Action, blockNum uint
 			ActionIndex:   actionIndex,
 			TransactionId: transactionID,
 			BlockNum:      blockNum,
+			BlockTime:     blockTime,
 		}
 
 		// check for default smart-contracts' action
